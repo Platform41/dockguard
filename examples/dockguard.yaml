@@ -1,0 +1,11 @@
+# Example DockGuard configuration for a macOS Docker Desktop setup
+# where Docker Desktop storage is hosted on an external SSD.
+
+external_mount_path: /Volumes/DockerSSD
+docker_storage_path: /Volumes/DockerSSD/DockerDesktop
+minimum_free_space_gb: 50
+
+docker_desktop:
+  settings_path: ~/Library/Application Support/Docker/settings-store.json
+  require_cli_start_support: true
+  fail_if_already_running: true

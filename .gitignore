@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Go build artifacts
+bin/
+dist/
+build/
+coverage.out
+*.coverprofile
+*.test
+
+# Go workspace and dependency state
+go.work
+go.work.sum
+
+# Local overrides
+/dockguard.yaml
