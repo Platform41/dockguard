@@ -1,43 +1,42 @@
-# Kanban Board — [Project Name]
+# Kanban Board — DockGuard
 
 **Status:** Active
-**Repository:** [Repo URL]
-**Last Updated:** [YYYY-MM-DD]
-**Board Owner:** [Persona / PM]
+**Repository:** `dockguard`
+**Last Updated:** 2026-03-24
+**Board Owner:** One
 
 ---
 
 ## Board Rules
 
-- **Single source of execution:** This file is the project task board.
-- **Card format:** `[Phase] Title`
-- **Owner format:** `Insider / Zero / One / Two / Three / PM`
+- **Single source of execution:** This file is the active task board for DockGuard.
+- **Card format:** `[Phase X] Title`
+- **Owner format:** `One / Three / PM`
 - **Priority format:** `P1 / P2 / P3`
 - **WIP limit:** Max 3 cards in `Doing`.
-- **Blockers:** If blocked more than 1 day, move to `Blocked` with a short reason.
-- **Definition of done:** A card is done only when output is documented and handed over.
-- **Test-first rule:** For implementation work, write or update tests before feature code.
-- **Release rule:** Tag only after One reviews and approves the release candidate.
-- **Versioning rule:** Use `0.x.y` before first production launch. Promote to `1.0.0` at first production release.
+- **Definition of done:** A card is done only when the output exists in the repo and the handoff is clear.
+- **Test-first rule:** For behavior changes and command logic, write or update tests before or alongside implementation.
+- **Release rule:** Tag only after One reviews the release candidate.
+- **Versioning rule:** Use `0.x.y` until the first public production release.
 
 ---
 
 ## Column Definitions
 
-- **Backlog:** Valid, not yet prepared for execution.
-- **This Week:** Prioritised for the current week, not yet started.
-- **Doing:** Actively being worked on.
-- **Review/Test:** Work complete — awaiting validation, QA, or handover.
-- **Blocked:** Waiting on client, dependency, approval, or technical resolution.
-- **Done:** Approved, documented, and handed over.
+- **Backlog:** Valid work, not yet prioritised for the current slice.
+- **This Week:** Next up for execution.
+- **Doing:** Actively in progress.
+- **Review/Test:** Implemented and awaiting review or validation.
+- **Blocked:** Waiting on a dependency, decision, or environment constraint.
+- **Done:** Completed, documented, and committed.
 
 ---
 
 ## Priority Legend
 
-- **P1:** Revenue, launch, or production-critical
-- **P2:** Important but not blocking launch
-- **P3:** Nice-to-have or post-launch improvement
+- **P1:** Required for the Go-based MVP
+- **P2:** Important but not blocking `v0.1.0`
+- **P3:** Post-MVP or exploratory work
 
 ---
 
@@ -45,76 +44,134 @@
 
 ### Backlog
 
-- [ ] `[Phase X] Task title`
-  **Owner:** [Persona]
-  **Priority:** [P1/P2/P3]
-  **Outcome:** [Expected deliverable]
-  **Source docs:** [Proposal link / Flow link / N/A]
-  **Dependencies:** [None / task names]
-  **Notes:** [Short note]
+- [ ] `[Phase 3] Implement settings file auto-detection for Docker Desktop variants`
+  **Owner:** Three
+  **Priority:** P1
+  **Outcome:** Support overrideable and version-aware settings file lookup
+  **Source docs:** `docs/project-lifecycle-v1.3.md`
+  **Dependencies:** `[Phase 2] Scaffold Go CLI and config model`
+  **Notes:** Must handle `settings-store.json` and older `settings.json` shapes defensively.
+
+- [ ] `[Phase 3] Add free-space and writability checks`
+  **Owner:** Three
+  **Priority:** P1
+  **Outcome:** Implement threshold and path health validation for external storage
+  **Source docs:** `docs/project-lifecycle-v1.3.md`
+  **Dependencies:** `[Phase 2] Scaffold Go CLI and config model`
+  **Notes:** Keep check output deterministic and script-friendly.
+
+- [ ] `[Phase 4] Implement guarded Docker Desktop startup`
+  **Owner:** Three
+  **Priority:** P1
+  **Outcome:** `dockguard start` runs checks and starts Docker Desktop only when safe
+  **Source docs:** `docs/project-lifecycle-v1.3.md`
+  **Dependencies:** `[Phase 3] Build preflight check suite`
+  **Notes:** Prefer `docker desktop start`; fail clearly if unsupported.
+
+- [ ] `[Phase 5] Prepare v0.1.0 release checklist`
+  **Owner:** One
+  **Priority:** P2
+  **Outcome:** Coherent release criteria for the first usable baseline
+  **Source docs:** `docs/project-lifecycle-v1.3.md`, `docs/versioning-and-git-workflow.md`
+  **Dependencies:** Core commands implemented and reviewed
+  **Notes:** Include docs, examples, and command validation.
+
+- [ ] `[Phase 5] Define post-MVP roadmap`
+  **Owner:** One
+  **Priority:** P3
+  **Outcome:** Prioritised follow-up work after `v0.1.0`
+  **Source docs:** `docs/project-lifecycle-v1.3.md`
+  **Dependencies:** MVP shipped
+  **Notes:** Candidate items: `doctor`, richer diagnostics, packaging.
 
 ### This Week
 
-- [ ] `[Phase X] Task title`
-  **Owner:** [Persona]
-  **Priority:** [P1/P2/P3]
-  **Outcome:** [Expected deliverable]
-  **Source docs:** [Proposal link / Flow link]
-  **Dependencies:** [None / task names]
-  **Notes:** [Short note]
+- [ ] `[Phase 1] Write README and example config for DockGuard`
+  **Owner:** One
+  **Priority:** P1
+  **Outcome:** Clear project entrypoint plus `examples/dockguard.yaml`
+  **Source docs:** `docs/project-lifecycle-v1.3.md`
+  **Dependencies:** None
+  **Notes:** README must keep the corrected Docker Desktop storage model near the top.
+
+- [ ] `[Phase 2] Scaffold Go CLI and config model`
+  **Owner:** Three
+  **Priority:** P1
+  **Outcome:** `go.mod`, `cmd/dockguard/main.go`, internal package layout, config loading path
+  **Source docs:** `docs/project-lifecycle-v1.3.md`
+  **Dependencies:** None
+  **Notes:** Match the agreed repo shape and keep settings path overrideable.
+
+- [ ] `[Phase 3] Build preflight check suite`
+  **Owner:** Three
+  **Priority:** P1
+  **Outcome:** `dockguard check` and `dockguard status` with mount, path, and settings validation
+  **Source docs:** `docs/project-lifecycle-v1.3.md`
+  **Dependencies:** `[Phase 2] Scaffold Go CLI and config model`
+  **Notes:** Cover mount existence, storage path existence, and readable output.
 
 ### Doing
 
-- [ ] `[Phase X] Task title`
-  **Owner:** [Persona]
-  **Priority:** [P1/P2/P3]
-  **Started:** [YYYY-MM-DD]
-  **Branch:** `feat/[branch-name]`
-  **Source docs:** [Proposal link / Flow link]
-  **Notes:** [Short status update]
+- [ ] `[Phase 1] Align project docs to reviewed Go-based MVP`
+  **Owner:** One
+  **Priority:** P1
+  **Started:** 2026-03-24
+  **Branch:** `master`
+  **Source docs:** `docs/project-lifecycle-v1.3.md`, reviewed proposal
+  **Notes:** Lifecycle is updated; Kanban is being aligned and README is next.
 
 ### Review/Test
 
-- [ ] `[Phase X] Task title`
-  **Owner:** [Persona]
-  **Priority:** [P1/P2/P3]
-  **Review Type:** [Client / Internal / QA / Technical]
-  **Branch:** `feat/[branch-name]`
-  **Commit:** `[short hash]`
-  **Test command:** `[exact command]`
-  **Test result:** [Pass / Fail / Pending]
-  **Source docs:** [Proposal link / Flow link]
-  **Notes:** [Short review context]
+- [ ] `[Phase 0] Confirm lifecycle reflects reviewed proposal`
+  **Owner:** One
+  **Priority:** P1
+  **Review Type:** Internal
+  **Branch:** `master`
+  **Commit:** `b0bbeb5`
+  **Test command:** `N/A`
+  **Test result:** Pending
+  **Source docs:** `docs/project-lifecycle-v1.3.md`
+  **Notes:** Validate that scope, compatibility notes, and delivery phases match the approved direction.
 
 ### Blocked
 
-- [ ] `[Phase X] Task title`
-  **Owner:** [Persona]
-  **Priority:** [P1/P2/P3]
-  **Blocked On:** [YYYY-MM-DD]
-  **Blocker:** [What is preventing progress]
-  **Next Action:** [Who needs to do what]
+- [ ] `[Phase 4] Validate Docker Desktop CLI behavior on target machine`
+  **Owner:** Three
+  **Priority:** P2
+  **Blocked On:** 2026-03-24
+  **Blocker:** Requires a real macOS Docker Desktop environment with externalized storage configured
+  **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
 
-- [x] `[Phase X] Task title`
-  **Owner:** [Persona]
-  **Priority:** [P1/P2/P3]
-  **Completed:** [YYYY-MM-DD]
-  **Branch:** `feat/[branch-name]`
-  **Commit:** `[short hash]`
-  **Deliverable:** [Doc / PR / Deploy / Asset]
-  **Notes:** [Short completion note]
+- [x] `[Phase 0] Review and tighten product proposal`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-03-24
+  **Branch:** `master`
+  **Commit:** `49724b5`
+  **Deliverable:** Initial repo baseline and proposal-aligned direction
+  **Notes:** Proposal corrected the Docker Desktop storage model, narrowed scope, and confirmed Go.
+
+- [x] `[Phase 1] Update project lifecycle for DockGuard`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-03-24
+  **Branch:** `master`
+  **Commit:** `b0bbeb5`
+  **Deliverable:** Lifecycle document
+  **Notes:** Replaced the generic studio template with a DockGuard-specific lifecycle and MVP path.
 
 ---
 
 ## Decision Log
 
-Record any approved decisions or workflow deviations here.
-
 | Date | Decision | Owner | Notes |
 | --- | --- | --- | --- |
-| [YYYY-MM-DD] | [What was decided or deviated from] | [Persona] | [e.g. direct main commit — hash abc1234] |
+| 2026-03-24 | Go is the official implementation language for DockGuard | One | Replaces any implicit script-first direction |
+| 2026-03-24 | v1 remains macOS-only CLI with `check`, `start`, and `status` | One | GUI, runtime protection, and non-macOS support deferred |
+| 2026-03-24 | Docker Desktop settings path must be configurable and version-aware | One | Do not assume one fixed settings file path |
+| 2026-03-24 | Direct commits were used for initial repo setup and doc baseline | One | Commits `49724b5` and `b0bbeb5` on `master` |
 
 ---
 
@@ -122,96 +179,20 @@ Record any approved decisions or workflow deviations here.
 
 | Phase | Owner | Typical Deliverable | Target Doc |
 | --- | --- | --- | --- |
-| Phase 0 | Insider | Domain dossier | `docs/audience/` |
-| Phase 1 | Zero | Marketing brief | `docs/audience/`, `project-lifecycle.md` |
-| Phase 2 | One | Technical scope | `docs/proposals/` |
-| Phase 3 | Two | UX and conversion spec | `docs/flows/` |
-| Phase 4 | Two + Three | Build, QA, deployment | Code + `docs/runbooks/` |
-| Phase 5 | Zero + PM | Launch review and growth loop | `project-lifecycle.md` |
-
----
-
-## Starter Cards
-
-### Backlog
-
-- [ ] `[Phase 0] Build domain dossier`
-  **Owner:** Insider
-  **Priority:** P1
-  **Outcome:** Industry glossary, workflow, pain matrix, trap doors
-  **Source docs:** N/A
-  **Dependencies:** None
-
-- [ ] `[Phase 1] Draft marketing brief`
-  **Owner:** Zero
-  **Priority:** P1
-  **Outcome:** KPI, buying trigger, objections, AI angle
-  **Source docs:** Phase 0 output
-  **Dependencies:** Phase 0 done
-
-- [ ] `[Phase 2] Write architecture proposal`
-  **Owner:** One
-  **Priority:** P1
-  **Outcome:** Stack, infra, security, performance targets
-  **Source docs:** `docs/proposals/one-<project>-proposal.md`
-  **Dependencies:** Phase 1 done
-
-- [ ] `[Phase 3] Write UX flow spec`
-  **Owner:** Two
-  **Priority:** P1
-  **Outcome:** Conversion map, design tokens, mobile wireframe
-  **Source docs:** `docs/flows/two-<project>-flow.md`
-  **Dependencies:** Phase 1, Phase 2 done
-
-- [ ] `[Phase 4] Write tests for implementation`
-  **Owner:** Three
-  **Priority:** P1
-  **Outcome:** Failing tests for critical flows before feature code
-  **Source docs:** Proposal + Flow links
-  **Dependencies:** Phase 2, Phase 3 done
-
-- [ ] `[Phase 4] Implement frontend`
-  **Owner:** Two
-  **Priority:** P1
-  **Outcome:** Tailwind components, responsive layout, CTAs
-  **Source docs:** `docs/flows/two-<project>-flow.md`
-  **Dependencies:** Tests written
-
-- [ ] `[Phase 4] Implement backend and integrations`
-  **Owner:** Three
-  **Priority:** P1
-  **Outcome:** API, database, auth, third-party integrations
-  **Source docs:** `docs/proposals/one-<project>-proposal.md`
-  **Dependencies:** Tests written
-
-- [ ] `[Phase 4] Review release candidate`
-  **Owner:** One
-  **Priority:** P1
-  **Outcome:** Architecture and release risk reviewed before tagging
-  **Source docs:** Phase 4 checklist in `project-lifecycle.md`
-  **Dependencies:** Implementation done
-
-- [ ] `[Phase 4] Tag and deploy`
-  **Owner:** One
-  **Priority:** P1
-  **Outcome:** Git tag, deployment verified, health check passed
-  **Source docs:** `docs/runbooks/deploy.md`
-  **Dependencies:** One review approved
-
-- [ ] `[Phase 5] Run launch review`
-  **Owner:** Zero / PM
-  **Priority:** P2
-  **Outcome:** Analytics verified, 30-day feedback loop started
-  **Source docs:** `project-lifecycle.md` Phase 5
-  **Dependencies:** Phase 4 done
+| Phase 0 | One | Product validation baseline | `docs/project-lifecycle-v1.3.md` |
+| Phase 1 | One | Docs foundation and positioning | `docs/project-lifecycle-v1.3.md`, `README.md` |
+| Phase 2 | Three | Go CLI skeleton and config model | Code |
+| Phase 3 | Three | Preflight checks and status flow | Code + tests |
+| Phase 4 | Three | Guarded Docker Desktop startup | Code + tests |
+| Phase 5 | One | Release review and tagging baseline | Docs + git tag |
 
 ---
 
 ## Weekly Cadence
 
-- **Monday:** Move ready work into `This Week`, confirm owners, clear blockers.
-- **Midweek:** Update card notes with concrete progress — not vague status.
-- **Friday:** Close completed cards, move review outcomes, prepare next week.
+- **Start of week:** Confirm the next MVP-critical cards and clear blockers.
+- **Midweek:** Update card notes with concrete output or dependency changes.
+- **End of week:** Move completed work to `Done`, prepare review items, and tighten the next slice.
 
 ---
 
@@ -219,4 +200,4 @@ Record any approved decisions or workflow deviations here.
 
 | Date | Change |
 | --- | --- |
-| [YYYY-MM-DD] | Board initialized |
+| 2026-03-24 | Replaced generic board template with DockGuard Go-based MVP board |
