@@ -3,7 +3,7 @@ package output
 import (
 	"fmt"
 
-	"github.com/ningenai/dockguard/internal/checks"
+	"github.com/platform41/dockguard/internal/checks"
 )
 
 func PrintUsage() {

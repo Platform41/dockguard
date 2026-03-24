@@ -3,7 +3,7 @@ package dockerdesktop
 import (
 	"fmt"
 
-	"github.com/ningenai/dockguard/internal/config"
+	"github.com/platform41/dockguard/internal/config"
 )
 
 func Start(cfg config.Config) error {

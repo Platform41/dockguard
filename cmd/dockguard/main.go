@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ningenai/dockguard/internal/app"
+	"github.com/platform41/dockguard/internal/app"
 )
 
 func main() {

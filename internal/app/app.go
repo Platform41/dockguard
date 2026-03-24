@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ningenai/dockguard/internal/checks"
-	"github.com/ningenai/dockguard/internal/config"
-	"github.com/ningenai/dockguard/internal/dockerdesktop"
-	"github.com/ningenai/dockguard/internal/output"
+	"github.com/platform41/dockguard/internal/checks"
+	"github.com/platform41/dockguard/internal/config"
+	"github.com/platform41/dockguard/internal/dockerdesktop"
+	"github.com/platform41/dockguard/internal/output"
 )
 
 func Run(args []string) (int, error) {

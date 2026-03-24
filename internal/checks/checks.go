@@ -1,6 +1,6 @@
 package checks
 
-import "github.com/ningenai/dockguard/internal/config"
+import "github.com/platform41/dockguard/internal/config"
 
 type Item struct {
 	Name    string
