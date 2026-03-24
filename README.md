@@ -31,11 +31,13 @@ Out of scope:
 - Windows or Linux support
 - GUI or menu bar app
 
-## Planned Commands
+## Commands
 
-- `dockguard status`: report readiness and key environment state
-- `dockguard check`: run all required preflight validations
-- `dockguard start`: run checks, then start Docker Desktop only if safe
+- `dockguard status [--config path]`: report readiness and key environment state
+- `dockguard check [--config path]`: run all required preflight validations
+- `dockguard start [--config path]`: run checks, then start Docker Desktop only if safe
+
+If `--config` is omitted, DockGuard looks for `./dockguard.yaml` and falls back to built-in defaults when that file is absent.
 
 ## Compatibility Notes
 
@@ -55,6 +57,34 @@ Expected config inputs:
 - optional explicit settings file path override
 - optional already-running guard
 
+Example:
+
+```bash
+dockguard check --config ./dockguard.yaml
+```
+
+## Current Checks
+
+`status` and `check` currently validate:
+
+- external mount path is configured and exists
+- Docker storage path is configured and exists
+- Docker storage path is writable
+- available free space meets the configured threshold
+- Docker Desktop settings file exists
+- Docker Desktop settings JSON contains the expected storage path
+- Docker Desktop is not already running when `fail_if_already_running` is enabled
+
+Recognized settings keys for storage-path validation:
+
+- `diskImageLocation`
+- `diskImagePath`
+- `dataFolder`
+- `storagePath`
+- `virtualMachineDiskPath`
+
+This settings validation is JSON-aware, but it is still based on recognized keys rather than Docker-version-specific schemas.
+
 ## Project Layout
 
 ```text
@@ -73,7 +103,9 @@ dockguard/
 The repo currently contains:
 
 - project lifecycle and Kanban docs aligned to the reviewed proposal
-- a Go CLI skeleton with placeholder command handlers
+- a working config loader with `--config` support
+- implemented preflight checks for filesystem state and Docker Desktop settings
+- guarded startup through `docker desktop start`
 - an example config file for the first implementation slice
 
-The next implementation milestone is `status` and `check`, followed by guarded `start`.
+The next implementation milestone is tightening Docker Desktop compatibility handling and expanding test coverage around real-world settings variants.
