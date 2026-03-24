@@ -2,8 +2,15 @@ package output
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/platform41/dockguard/internal/checks"
+)
+
+const (
+	colorReset = "\033[0m"
+	colorGreen = "\033[32m"
+	colorRed   = "\033[31m"
 )
 
 func PrintUsage() {
@@ -18,7 +25,7 @@ func PrintUsage() {
 func PrintStatus(status checks.Status) {
 	fmt.Printf("Status: %s\n", status.Summary)
 	for _, item := range status.Items {
-		fmt.Printf("- %s: %s", formatState(item.OK), item.Name)
+		fmt.Printf("- %s %s", formatState(item.OK), item.Name)
 		if item.Message != "" {
 			fmt.Printf(" (%s)", item.Message)
 		}
@@ -28,7 +35,7 @@ func PrintStatus(status checks.Status) {
 
 func PrintCheckResult(result checks.Result) {
 	for _, item := range result.Items {
-		fmt.Printf("- %s: %s", formatState(item.OK), item.Name)
+		fmt.Printf("- %s %s", formatState(item.OK), item.Name)
 		if item.Message != "" {
 			fmt.Printf(" (%s)", item.Message)
 		}
@@ -42,7 +49,28 @@ func PrintStarted() {
 
 func formatState(ok bool) string {
 	if ok {
-		return "ok"
+		return colorize("[ok]", colorGreen)
 	}
-	return "fail"
+	return colorize("[fail]", colorRed)
+}
+
+func colorize(text, color string) string {
+	if !shouldUseColor() {
+		return text
+	}
+
+	return color + text + colorReset
+}
+
+func shouldUseColor() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+
+	info, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+
+	return (info.Mode() & os.ModeCharDevice) != 0
 }
