@@ -1,13 +1,14 @@
 package checks
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	"github.com/platform41/dockguard/internal/config"
+	"github.com/platform41/dockguard/internal/dockerdesktop"
 )
 
 type Item struct {
@@ -26,6 +27,8 @@ type Status struct {
 	Summary string
 	Items   []Item
 }
+
+var isDockerDesktopRunning = dockerdesktop.IsRunning
 
 func BuildStatus(cfg config.Config) Status {
 	result := RunPreflight(cfg)
@@ -53,6 +56,10 @@ func RunPreflight(cfg config.Config) Result {
 		checkConfiguredPath("docker desktop settings path configured", cfg.DockerDesktopConfig.SettingsPath),
 		checkPathExists("docker desktop settings file exists", cfg.DockerDesktopConfig.SettingsPath),
 		checkSettingsContainStoragePath(cfg.DockerDesktopConfig.SettingsPath, cfg.DockerStoragePath),
+	}
+
+	if cfg.DockerDesktopConfig.FailIfAlreadyRunning {
+		items = append(items, checkDockerDesktopNotRunning())
 	}
 
 	ok := true
@@ -163,18 +170,74 @@ func checkSettingsContainStoragePath(settingsPath, dockerStoragePath string) Ite
 	}
 
 	expected := filepath.Clean(dockerStoragePath)
-	normalizedContent := strings.ReplaceAll(string(content), `\/`, `/`)
-	if strings.Contains(normalizedContent, expected) {
-		return Item{
-			Name:    "docker desktop settings match storage path",
-			OK:      true,
-			Message: expected,
+
+	paths, err := extractSettingsPaths(content)
+	if err != nil {
+		return Item{Name: "docker desktop settings match storage path", OK: false, Message: fmt.Sprintf("parse settings JSON: %v", err)}
+	}
+
+	for _, candidate := range paths {
+		if filepath.Clean(candidate) == expected {
+			return Item{
+				Name:    "docker desktop settings match storage path",
+				OK:      true,
+				Message: expected,
+			}
 		}
 	}
 
 	return Item{
 		Name:    "docker desktop settings match storage path",
 		OK:      false,
-		Message: fmt.Sprintf("expected path not found in settings file: %s", expected),
+		Message: fmt.Sprintf("expected path not found in recognized settings keys: %s", expected),
+	}
+}
+
+func checkDockerDesktopNotRunning() Item {
+	running, err := isDockerDesktopRunning()
+	if err != nil {
+		return Item{Name: "docker desktop not already running", OK: false, Message: err.Error()}
+	}
+
+	if running {
+		return Item{Name: "docker desktop not already running", OK: false, Message: "Docker Desktop is already running"}
+	}
+
+	return Item{Name: "docker desktop not already running", OK: true, Message: "not running"}
+}
+
+func extractSettingsPaths(content []byte) ([]string, error) {
+	var data any
+	if err := json.Unmarshal(content, &data); err != nil {
+		return nil, err
+	}
+
+	var paths []string
+	collectSettingsPaths(data, &paths)
+	return paths, nil
+}
+
+func collectSettingsPaths(value any, paths *[]string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			if pathValue, ok := nested.(string); ok && isStoragePathKey(key) {
+				*paths = append(*paths, pathValue)
+			}
+			collectSettingsPaths(nested, paths)
+		}
+	case []any:
+		for _, item := range typed {
+			collectSettingsPaths(item, paths)
+		}
+	}
+}
+
+func isStoragePathKey(key string) bool {
+	switch key {
+	case "diskImageLocation", "diskImagePath", "dataFolder", "storagePath", "virtualMachineDiskPath":
+		return true
+	default:
+		return false
 	}
 }

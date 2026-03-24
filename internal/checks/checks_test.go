@@ -10,6 +10,14 @@ import (
 )
 
 func TestRunPreflightSuccess(t *testing.T) {
+	originalIsRunning := isDockerDesktopRunning
+	t.Cleanup(func() {
+		isDockerDesktopRunning = originalIsRunning
+	})
+	isDockerDesktopRunning = func() (bool, error) {
+		return false, nil
+	}
+
 	mountPath := t.TempDir()
 	storagePath := filepath.Join(mountPath, "DockerDesktop")
 	settingsPath := filepath.Join(t.TempDir(), "settings-store.json")
@@ -28,7 +36,8 @@ func TestRunPreflightSuccess(t *testing.T) {
 		DockerStoragePath:  storagePath,
 		MinimumFreeSpaceGB: 1,
 		DockerDesktopConfig: config.DockerDesktopConfig{
-			SettingsPath: settingsPath,
+			SettingsPath:         settingsPath,
+			FailIfAlreadyRunning: true,
 		},
 	}
 
@@ -39,6 +48,14 @@ func TestRunPreflightSuccess(t *testing.T) {
 }
 
 func TestRunPreflightFailsWhenSettingsDoNotMatch(t *testing.T) {
+	originalIsRunning := isDockerDesktopRunning
+	t.Cleanup(func() {
+		isDockerDesktopRunning = originalIsRunning
+	})
+	isDockerDesktopRunning = func() (bool, error) {
+		return false, nil
+	}
+
 	mountPath := t.TempDir()
 	storagePath := filepath.Join(mountPath, "DockerDesktop")
 	settingsPath := filepath.Join(t.TempDir(), "settings-store.json")
@@ -75,5 +92,54 @@ func TestRunPreflightFailsWhenSettingsDoNotMatch(t *testing.T) {
 
 	if !foundMismatch {
 		t.Fatalf("expected mismatch item, items = %#v", result.Items)
+	}
+}
+
+func TestRunPreflightFailsWhenDockerDesktopIsAlreadyRunning(t *testing.T) {
+	originalIsRunning := isDockerDesktopRunning
+	t.Cleanup(func() {
+		isDockerDesktopRunning = originalIsRunning
+	})
+	isDockerDesktopRunning = func() (bool, error) {
+		return true, nil
+	}
+
+	mountPath := t.TempDir()
+	storagePath := filepath.Join(mountPath, "DockerDesktop")
+	settingsPath := filepath.Join(t.TempDir(), "settings-store.json")
+
+	if err := os.Mkdir(storagePath, 0o755); err != nil {
+		t.Fatalf("mkdir storage path: %v", err)
+	}
+
+	content := `{"diskImageLocation": "` + storagePath + `"}`
+	if err := os.WriteFile(settingsPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	cfg := config.Config{
+		ExternalMountPath:  mountPath,
+		DockerStoragePath:  storagePath,
+		MinimumFreeSpaceGB: 1,
+		DockerDesktopConfig: config.DockerDesktopConfig{
+			SettingsPath:         settingsPath,
+			FailIfAlreadyRunning: true,
+		},
+	}
+
+	result := RunPreflight(cfg)
+	if result.OK {
+		t.Fatal("RunPreflight() OK = true, want false")
+	}
+
+	foundRunningFailure := false
+	for _, item := range result.Items {
+		if item.Name == "docker desktop not already running" && !item.OK {
+			foundRunningFailure = true
+		}
+	}
+
+	if !foundRunningFailure {
+		t.Fatalf("expected already-running failure, items = %#v", result.Items)
 	}
 }

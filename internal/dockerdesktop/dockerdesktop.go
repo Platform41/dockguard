@@ -11,11 +11,22 @@ import (
 var (
 	lookPath = exec.LookPath
 	runCmd   = runCommand
+	runQuery = runQueryCommand
 )
 
 func Start(cfg config.Config) error {
 	if _, err := lookPath("docker"); err != nil {
 		return fmt.Errorf("docker CLI not found in PATH: %w", err)
+	}
+
+	if cfg.DockerDesktopConfig.FailIfAlreadyRunning {
+		running, err := IsRunning()
+		if err != nil {
+			return fmt.Errorf("check whether Docker Desktop is already running: %w", err)
+		}
+		if running {
+			return fmt.Errorf("Docker Desktop is already running")
+		}
 	}
 
 	if err := runCmd("docker", "desktop", "start"); err != nil {
@@ -26,6 +37,21 @@ func Start(cfg config.Config) error {
 	}
 
 	return nil
+}
+
+func IsRunning() (bool, error) {
+	if _, err := lookPath("pgrep"); err != nil {
+		return false, fmt.Errorf("pgrep not found in PATH: %w", err)
+	}
+
+	if err := runQuery("pgrep", "-x", "Docker"); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
 }
 
 func runCommand(name string, args ...string) error {
@@ -40,4 +66,9 @@ func runCommand(name string, args ...string) error {
 	}
 
 	return nil
+}
+
+func runQueryCommand(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	return cmd.Run()
 }
