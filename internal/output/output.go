@@ -10,15 +10,19 @@ func PrintUsage() {
 	fmt.Println("DockGuard")
 	fmt.Println("")
 	fmt.Println("Usage:")
-	fmt.Println("  dockguard status")
-	fmt.Println("  dockguard check")
-	fmt.Println("  dockguard start")
+	fmt.Println("  dockguard status [--config path]")
+	fmt.Println("  dockguard check [--config path]")
+	fmt.Println("  dockguard start [--config path]")
 }
 
 func PrintStatus(status checks.Status) {
 	fmt.Printf("Status: %s\n", status.Summary)
 	for _, item := range status.Items {
-		fmt.Printf("- %s: %s\n", formatState(item.OK), item.Name)
+		fmt.Printf("- %s: %s", formatState(item.OK), item.Name)
+		if item.Message != "" {
+			fmt.Printf(" (%s)", item.Message)
+		}
+		fmt.Println()
 	}
 }
 

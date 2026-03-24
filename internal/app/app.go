@@ -11,17 +11,22 @@ import (
 )
 
 func Run(args []string) (int, error) {
-	if len(args) == 0 {
+	command, configPath, err := parseArgs(args)
+	if err != nil {
+		return 1, err
+	}
+
+	if command == "" {
 		output.PrintUsage()
 		return 1, nil
 	}
 
-	cfg, err := config.LoadDefault()
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		return 1, fmt.Errorf("load config: %w", err)
 	}
 
-	switch args[0] {
+	switch command {
 	case "status":
 		return runStatus(cfg)
 	case "check":
@@ -34,6 +39,28 @@ func Run(args []string) (int, error) {
 	default:
 		return 1, fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func parseArgs(args []string) (command string, configPath string, err error) {
+	if len(args) == 0 {
+		return "", "", nil
+	}
+
+	command = args[0]
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--config":
+			if i+1 >= len(args) {
+				return "", "", errors.New("--config requires a path")
+			}
+			configPath = args[i+1]
+			i++
+		default:
+			return "", "", fmt.Errorf("unknown argument %q", args[i])
+		}
+	}
+
+	return command, configPath, nil
 }
 
 func runStatus(cfg config.Config) (int, error) {
