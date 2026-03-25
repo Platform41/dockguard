@@ -199,6 +199,30 @@ func TestIsRunningReturnsTrueWhenStatusRunning(t *testing.T) {
 	}
 }
 
+func TestIsRunningAcceptsStatusWithColon(t *testing.T) {
+	originalLookPath := lookPath
+	originalRunStatus := runStatus
+	t.Cleanup(func() {
+		lookPath = originalLookPath
+		runStatus = originalRunStatus
+	})
+
+	lookPath = func(file string) (string, error) {
+		return "/usr/local/bin/" + file, nil
+	}
+	runStatus = func(name string, args ...string) (string, error) {
+		return "Status: running\n", nil
+	}
+
+	running, err := IsRunning()
+	if err != nil {
+		t.Fatalf("IsRunning() error = %v", err)
+	}
+	if !running {
+		t.Fatal("IsRunning() = false, want true")
+	}
+}
+
 func TestIsRunningReturnsFalseWhenStatusStopped(t *testing.T) {
 	originalLookPath := lookPath
 	originalRunStatus := runStatus

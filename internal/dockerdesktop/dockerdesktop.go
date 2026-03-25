@@ -110,8 +110,11 @@ func isUnsupportedDesktopCLIError(err error) bool {
 func parseStatusLine(output string) (string, bool) {
 	for _, line := range strings.Split(output, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) >= 2 && strings.EqualFold(fields[0], "Status") {
-			return fields[1], true
+		if len(fields) >= 2 {
+			label := strings.TrimSuffix(fields[0], ":")
+			if strings.EqualFold(label, "Status") {
+				return fields[1], true
+			}
 		}
 	}
 
