@@ -2,7 +2,7 @@
 
 **Status:** Active
 **Repository:** `dockguard`
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-25
 **Board Owner:** One
 
 ---
@@ -86,14 +86,6 @@
 
 ### This Week
 
-- [ ] `[Phase 1] Write README and example config for DockGuard`
-  **Owner:** One
-  **Priority:** P1
-  **Outcome:** Clear project entrypoint plus `examples/dockguard.yaml`
-  **Source docs:** `docs/project-lifecycle-v1.3.md`
-  **Dependencies:** None
-  **Notes:** README must keep the corrected Docker Desktop storage model near the top.
-
 - [ ] `[Phase 2] Scaffold Go CLI and config model`
   **Owner:** Three
   **Priority:** P1
@@ -116,9 +108,19 @@
   **Owner:** One
   **Priority:** P1
   **Started:** 2026-03-24
-  **Branch:** `master`
+  **Branch:** `docs/kanban-phase1`
   **Source docs:** `docs/project-lifecycle-v1.3.md`, reviewed proposal
   **Notes:** Lifecycle is updated; Kanban is being aligned and README is next.
+
+- [ ] `[Phase 1] Write README and example config for DockGuard`
+  **Owner:** One
+  **Priority:** P1
+  **Started:** 2026-03-25
+  **Branch:** `docs/kanban-phase1`
+  **Outcome:** Clear project entrypoint plus `examples/dockguard.yaml`
+  **Source docs:** `docs/project-lifecycle-v1.3.md`
+  **Dependencies:** None
+  **Notes:** README must keep the corrected Docker Desktop storage model near the top.
 
 ### Review/Test
 
