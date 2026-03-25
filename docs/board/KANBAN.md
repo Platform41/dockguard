@@ -68,16 +68,7 @@ _None._
 
 ### Review/Test
 
-- [ ] `[Phase 3] Tighten Docker Desktop compatibility handling + expand tests`
-  **Owner:** Three
-  **Priority:** P1
-  **Started:** 2026-03-25
-  **Branch:** `feat/phase2-scaffold`
-  **Commit:** `815526b`
-  **Test command:** `go test ./...`
-  **Test result:** Passed
-  **Source docs:** `docs/project-lifecycle-v1.3.md`, `README.md`
-  **Notes:** Switched running guard to `docker desktop status`, added CLI unsupported messaging, expanded settings key detection tests.
+_None._
 
 ### Blocked
 
@@ -170,6 +161,17 @@ _None._
   **Commit:** `9e4b0f7`
   **Deliverable:** Free-space + writable path checks
   **Notes:** Deterministic output for scripting.
+
+- [x] `[Phase 3] Tighten Docker Desktop compatibility handling + expand tests`
+  **Owner:** Three
+  **Priority:** P1
+  **Completed:** 2026-03-25
+  **Branch:** `feat/phase2-scaffold`
+  **Commit:** `f3e698f`
+  **Test command:** `go test ./...`
+  **Test result:** Passed
+  **Deliverable:** Compatibility detection and settings key coverage
+  **Notes:** Switched running guard to `docker desktop status`, added CLI unsupported messaging, expanded settings key detection tests.
 
 - [x] `[Phase 4] Implement guarded Docker Desktop startup`
   **Owner:** Three
