@@ -2,7 +2,7 @@
 
 **Status:** Active
 **Repository:** `dockguard`
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-25
 **Board Owner:** One
 
 ---
@@ -44,30 +44,6 @@
 
 ### Backlog
 
-- [ ] `[Phase 3] Implement settings file auto-detection for Docker Desktop variants`
-  **Owner:** Three
-  **Priority:** P1
-  **Outcome:** Support overrideable and version-aware settings file lookup
-  **Source docs:** `docs/project-lifecycle-v1.3.md`
-  **Dependencies:** `[Phase 2] Scaffold Go CLI and config model`
-  **Notes:** Must handle `settings-store.json` and older `settings.json` shapes defensively.
-
-- [ ] `[Phase 3] Add free-space and writability checks`
-  **Owner:** Three
-  **Priority:** P1
-  **Outcome:** Implement threshold and path health validation for external storage
-  **Source docs:** `docs/project-lifecycle-v1.3.md`
-  **Dependencies:** `[Phase 2] Scaffold Go CLI and config model`
-  **Notes:** Keep check output deterministic and script-friendly.
-
-- [ ] `[Phase 4] Implement guarded Docker Desktop startup`
-  **Owner:** Three
-  **Priority:** P1
-  **Outcome:** `dockguard start` runs checks and starts Docker Desktop only when safe
-  **Source docs:** `docs/project-lifecycle-v1.3.md`
-  **Dependencies:** `[Phase 3] Build preflight check suite`
-  **Notes:** Prefer `docker desktop start`; fail clearly if unsupported.
-
 - [ ] `[Phase 5] Prepare v0.1.0 release checklist`
   **Owner:** One
   **Priority:** P2
@@ -86,52 +62,17 @@
 
 ### This Week
 
-- [ ] `[Phase 1] Write README and example config for DockGuard`
-  **Owner:** One
-  **Priority:** P1
-  **Outcome:** Clear project entrypoint plus `examples/dockguard.yaml`
-  **Source docs:** `docs/project-lifecycle-v1.3.md`
-  **Dependencies:** None
-  **Notes:** README must keep the corrected Docker Desktop storage model near the top.
-
-- [ ] `[Phase 2] Scaffold Go CLI and config model`
-  **Owner:** Three
-  **Priority:** P1
-  **Outcome:** `go.mod`, `cmd/dockguard/main.go`, internal package layout, config loading path
-  **Source docs:** `docs/project-lifecycle-v1.3.md`
-  **Dependencies:** None
-  **Notes:** Match the agreed repo shape and keep settings path overrideable.
-
-- [ ] `[Phase 3] Build preflight check suite`
-  **Owner:** Three
-  **Priority:** P1
-  **Outcome:** `dockguard check` and `dockguard status` with mount, path, and settings validation
-  **Source docs:** `docs/project-lifecycle-v1.3.md`
-  **Dependencies:** `[Phase 2] Scaffold Go CLI and config model`
-  **Notes:** Cover mount existence, storage path existence, and readable output.
-
 ### Doing
 
-- [ ] `[Phase 1] Align project docs to reviewed Go-based MVP`
-  **Owner:** One
+- [ ] `[Phase 3] Tighten Docker Desktop compatibility handling + expand tests`
+  **Owner:** Three
   **Priority:** P1
-  **Started:** 2026-03-24
-  **Branch:** `master`
-  **Source docs:** `docs/project-lifecycle-v1.3.md`, reviewed proposal
-  **Notes:** Lifecycle is updated; Kanban is being aligned and README is next.
+  **Started:** 2026-03-25
+  **Branch:** `feat/phase2-scaffold`
+  **Source docs:** `docs/project-lifecycle-v1.3.md`, `README.md`
+  **Notes:** Expand settings variants coverage and test CLI support detection paths.
 
 ### Review/Test
-
-- [ ] `[Phase 0] Confirm lifecycle reflects reviewed proposal`
-  **Owner:** One
-  **Priority:** P1
-  **Review Type:** Internal
-  **Branch:** `master`
-  **Commit:** `b0bbeb5`
-  **Test command:** `N/A`
-  **Test result:** Pending
-  **Source docs:** `docs/project-lifecycle-v1.3.md`
-  **Notes:** Validate that scope, compatibility notes, and delivery phases match the approved direction.
 
 ### Blocked
 
@@ -153,6 +94,15 @@
   **Deliverable:** Initial repo baseline and proposal-aligned direction
   **Notes:** Proposal corrected the Docker Desktop storage model, narrowed scope, and confirmed Go.
 
+- [x] `[Phase 0] Confirm lifecycle reflects reviewed proposal`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-03-24
+  **Branch:** `master`
+  **Commit:** `6f3b6a2`
+  **Deliverable:** Lifecycle review closure
+  **Notes:** Scope, compatibility notes, and delivery phases confirmed.
+
 - [x] `[Phase 1] Update project lifecycle for DockGuard`
   **Owner:** One
   **Priority:** P1
@@ -161,6 +111,69 @@
   **Commit:** `b0bbeb5`
   **Deliverable:** Lifecycle document
   **Notes:** Replaced the generic studio template with a DockGuard-specific lifecycle and MVP path.
+
+- [x] `[Phase 1] Align project docs to reviewed Go-based MVP`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-03-24
+  **Branch:** `docs/kanban-phase1`
+  **Commit:** `b8a9c9e`
+  **Deliverable:** Kanban and docs alignment
+  **Notes:** Phase 1 docs closed out.
+
+- [x] `[Phase 1] Write README and example config for DockGuard`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-03-24
+  **Branch:** `docs/kanban-phase1`
+  **Commit:** `d5b87a1`
+  **Deliverable:** README + `examples/dockguard.yaml`
+  **Notes:** Corrected Docker Desktop storage model and config usage reflected.
+
+- [x] `[Phase 2] Scaffold Go CLI and config model`
+  **Owner:** Three
+  **Priority:** P1
+  **Completed:** 2026-03-24
+  **Branch:** `master`
+  **Commit:** `9e4b0f7`
+  **Deliverable:** Go module, CLI entrypoint, config loader
+  **Notes:** Config path supports overrides and settings detection.
+
+- [x] `[Phase 3] Build preflight check suite`
+  **Owner:** Three
+  **Priority:** P1
+  **Completed:** 2026-03-24
+  **Branch:** `master`
+  **Commit:** `9e4b0f7`
+  **Deliverable:** `dockguard check` and `dockguard status`
+  **Notes:** Includes mount/path checks, free space, and settings validation.
+
+- [x] `[Phase 3] Implement settings file auto-detection for Docker Desktop variants`
+  **Owner:** Three
+  **Priority:** P1
+  **Completed:** 2026-03-24
+  **Branch:** `master`
+  **Commit:** `9e4b0f7`
+  **Deliverable:** Version-aware settings path detection
+  **Notes:** Supports `settings-store.json` and `settings.json` candidates.
+
+- [x] `[Phase 3] Add free-space and writability checks`
+  **Owner:** Three
+  **Priority:** P1
+  **Completed:** 2026-03-24
+  **Branch:** `master`
+  **Commit:** `9e4b0f7`
+  **Deliverable:** Free-space + writable path checks
+  **Notes:** Deterministic output for scripting.
+
+- [x] `[Phase 4] Implement guarded Docker Desktop startup`
+  **Owner:** Three
+  **Priority:** P1
+  **Completed:** 2026-03-24
+  **Branch:** `master`
+  **Commit:** `611370e`
+  **Deliverable:** `dockguard start` with guarded startup
+  **Notes:** Fails clearly when CLI support is missing.
 
 ---
 

@@ -143,3 +143,35 @@ func TestRunPreflightFailsWhenDockerDesktopIsAlreadyRunning(t *testing.T) {
 		t.Fatalf("expected already-running failure, items = %#v", result.Items)
 	}
 }
+
+func TestExtractSettingsPathsCollectsNestedKeys(t *testing.T) {
+	content := []byte(`{
+  "diskImageLocation": "/Volumes/External/DockerDesktop",
+  "nested": {
+    "dataFolder": "/Volumes/External/Data",
+    "more": [{"storagePath": "/Volumes/External/Storage"}]
+  }
+}`)
+
+	paths, err := extractSettingsPaths(content)
+	if err != nil {
+		t.Fatalf("extractSettingsPaths() error = %v", err)
+	}
+
+	seen := map[string]bool{}
+	for _, path := range paths {
+		seen[path] = true
+	}
+
+	expected := []string{
+		"/Volumes/External/DockerDesktop",
+		"/Volumes/External/Data",
+		"/Volumes/External/Storage",
+	}
+
+	for _, path := range expected {
+		if !seen[path] {
+			t.Fatalf("expected path %q in results, got %#v", path, paths)
+		}
+	}
+}

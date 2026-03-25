@@ -65,3 +65,38 @@ func TestLoadReturnsDefaultsWhenConfigIsMissing(t *testing.T) {
 		t.Fatal("SettingsPath should be set from defaults")
 	}
 }
+
+func TestDetectSettingsPathUsesExistingCandidate(t *testing.T) {
+	home := t.TempDir()
+
+	settingsPath := filepath.Join(home, "Library", "Group Containers", "group.com.docker", "settings-store.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatalf("mkdir settings dir: %v", err)
+	}
+	if err := os.WriteFile(settingsPath, []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write settings file: %v", err)
+	}
+
+	resolved, err := detectSettingsPath(home)
+	if err != nil {
+		t.Fatalf("detectSettingsPath() error = %v", err)
+	}
+
+	if resolved != settingsPath {
+		t.Fatalf("detectSettingsPath() = %q, want %q", resolved, settingsPath)
+	}
+}
+
+func TestDetectSettingsPathFallsBackToFirstCandidate(t *testing.T) {
+	home := t.TempDir()
+
+	resolved, err := detectSettingsPath(home)
+	if err != nil {
+		t.Fatalf("detectSettingsPath() error = %v", err)
+	}
+
+	expected := filepath.Join(home, "Library", "Application Support", "Docker", "settings-store.json")
+	if resolved != expected {
+		t.Fatalf("detectSettingsPath() = %q, want %q", resolved, expected)
+	}
+}
