@@ -48,7 +48,7 @@
   **Owner:** One
   **Priority:** P2
   **Outcome:** Coherent release criteria for the first usable baseline
-  **Source docs:** `docs/project-lifecycle-v1.3.md`, `docs/versioning-and-git-workflow.md`
+  **Source docs:** `docs/project-lifecycle.md`, `docs/versioning-and-git-workflow.md`
   **Dependencies:** Core commands implemented and reviewed
   **Notes:** Include docs, examples, and command validation.
 
@@ -56,7 +56,7 @@
   **Owner:** One
   **Priority:** P3
   **Outcome:** Prioritised follow-up work after `v0.1.0`
-  **Source docs:** `docs/project-lifecycle-v1.3.md`
+  **Source docs:** `docs/project-lifecycle.md`
   **Dependencies:** MVP shipped
   **Notes:** Candidate items: `doctor`, richer diagnostics, packaging.
 
@@ -199,8 +199,8 @@ _None._
 
 | Phase | Owner | Typical Deliverable | Target Doc |
 | --- | --- | --- | --- |
-| Phase 0 | One | Product validation baseline | `docs/project-lifecycle-v1.3.md` |
-| Phase 1 | One | Docs foundation and positioning | `docs/project-lifecycle-v1.3.md`, `README.md` |
+| Phase 0 | One | Product validation baseline | `docs/project-lifecycle.md` |
+| Phase 1 | One | Docs foundation and positioning | `docs/project-lifecycle.md`, `README.md` |
 | Phase 2 | Three | Go CLI skeleton and config model | Code |
 | Phase 3 | Three | Preflight checks and status flow | Code + tests |
 | Phase 4 | Three | Guarded Docker Desktop startup | Code + tests |
