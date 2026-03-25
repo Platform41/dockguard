@@ -47,7 +47,7 @@ If `--config` is omitted, DockGuard looks for `./dockguard.yaml` and falls back 
 
 ## Configuration
 
-See [examples/dockguard.yaml](/Users/nurulazrad/Projects/ningenai/dockguard/examples/dockguard.yaml) for the intended config shape.
+See [examples/dockguard.yaml](examples/dockguard.yaml) for the intended config shape.
 
 Expected config inputs:
 
