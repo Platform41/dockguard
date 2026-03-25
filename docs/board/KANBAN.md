@@ -108,16 +108,7 @@ _None._
 
 ### Review/Test
 
-- [ ] `[Phase 0] Confirm lifecycle reflects reviewed proposal`
-  **Owner:** One
-  **Priority:** P1
-  **Review Type:** Internal
-  **Branch:** `master`
-  **Commit:** `b0bbeb5`
-  **Test command:** `N/A`
-  **Test result:** Pending
-  **Source docs:** `docs/project-lifecycle-v1.3.md`
-  **Notes:** Validate that scope, compatibility notes, and delivery phases match the approved direction.
+_None._
 
 ### Blocked
 
@@ -165,6 +156,15 @@ _None._
   **Commit:** `d5b87a1`
   **Deliverable:** Project entrypoint plus `examples/dockguard.yaml`
   **Notes:** Example config ships the expected external mount and Docker settings inputs.
+
+- [x] `[Phase 0] Confirm lifecycle reflects reviewed proposal`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-03-25
+  **Branch:** `docs/kanban-phase1`
+  **Commit:** `b0bbeb5`
+  **Deliverable:** Lifecycle alignment verified
+  **Notes:** Scope, compatibility notes, and delivery phases match the reviewed direction.
 
 ---
 
