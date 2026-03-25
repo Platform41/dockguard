@@ -64,15 +64,20 @@
 
 ### Doing
 
+_None._
+
+### Review/Test
+
 - [ ] `[Phase 3] Tighten Docker Desktop compatibility handling + expand tests`
   **Owner:** Three
   **Priority:** P1
   **Started:** 2026-03-25
   **Branch:** `feat/phase2-scaffold`
+  **Commit:** `815526b`
+  **Test command:** `go test ./...`
+  **Test result:** Passed
   **Source docs:** `docs/project-lifecycle-v1.3.md`, `README.md`
-  **Notes:** Expand settings variants coverage and test CLI support detection paths.
-
-### Review/Test
+  **Notes:** Switched running guard to `docker desktop status`, added CLI unsupported messaging, expanded settings key detection tests.
 
 ### Blocked
 
@@ -97,8 +102,8 @@
 - [x] `[Phase 0] Confirm lifecycle reflects reviewed proposal`
   **Owner:** One
   **Priority:** P1
-  **Completed:** 2026-03-24
-  **Branch:** `master`
+  **Completed:** 2026-03-25
+  **Branch:** `docs/kanban-phase1`
   **Commit:** `6f3b6a2`
   **Deliverable:** Lifecycle review closure
   **Notes:** Scope, compatibility notes, and delivery phases confirmed.
@@ -115,7 +120,7 @@
 - [x] `[Phase 1] Align project docs to reviewed Go-based MVP`
   **Owner:** One
   **Priority:** P1
-  **Completed:** 2026-03-24
+  **Completed:** 2026-03-25
   **Branch:** `docs/kanban-phase1`
   **Commit:** `b8a9c9e`
   **Deliverable:** Kanban and docs alignment
@@ -124,7 +129,7 @@
 - [x] `[Phase 1] Write README and example config for DockGuard`
   **Owner:** One
   **Priority:** P1
-  **Completed:** 2026-03-24
+  **Completed:** 2026-03-25
   **Branch:** `docs/kanban-phase1`
   **Commit:** `d5b87a1`
   **Deliverable:** README + `examples/dockguard.yaml`
