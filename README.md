@@ -2,6 +2,36 @@
 
 DockGuard is a macOS-first Go CLI that performs preflight checks before starting Docker Desktop when Docker Desktop storage is hosted on an external SSD.
 
+## Quickstart
+
+1. Create a config file (`./dockguard.yaml`) based on the example below.
+2. Run `dockguard status` to verify readiness.
+3. Start Docker Desktop safely with `dockguard start`.
+
+```bash
+dockguard status
+dockguard start
+```
+
+## Install
+
+From source (Go 1.21+):
+
+```bash
+go install ./cmd/dockguard
+```
+
+Build a local binary:
+
+```bash
+go build -o ./bin/dockguard ./cmd/dockguard
+```
+
+## Prerequisites
+
+- macOS with Docker Desktop installed
+- External SSD configured as the Docker Desktop storage location
+
 ## Correct Mental Model
 
 - Your MacBook provides CPU, RAM, macOS, and the Docker Desktop app.
@@ -47,7 +77,7 @@ If `--config` is omitted, DockGuard looks for `./dockguard.yaml` and falls back 
 
 ## Configuration
 
-See [examples/dockguard.yaml](/Users/nurulazrad/Projects/ningenai/dockguard/examples/dockguard.yaml) for the intended config shape.
+See `examples/dockguard.yaml` for the intended config shape.
 
 Expected config inputs:
 
@@ -61,6 +91,15 @@ Example:
 
 ```bash
 dockguard check --config ./dockguard.yaml
+```
+
+Minimal config example:
+
+```yaml
+external_mount_path: /Volumes/DockerSSD
+docker_storage_path: /Volumes/DockerSSD/DockerDesktop
+minimum_free_space_gb: 50
+fail_if_already_running: true
 ```
 
 ## Current Checks
@@ -84,6 +123,13 @@ Recognized settings keys for storage-path validation:
 - `virtualMachineDiskPath`
 
 This settings validation is JSON-aware, but it is still based on recognized keys rather than Docker-version-specific schemas.
+
+## Common Failures
+
+- External mount not found: ensure the SSD is mounted at `external_mount_path`.
+- Storage path missing: confirm Docker Desktop is configured to use the external path.
+- Free space below threshold: lower `minimum_free_space_gb` or free space on the SSD.
+- Docker already running: stop Docker Desktop or set `fail_if_already_running: false`.
 
 ## Project Layout
 

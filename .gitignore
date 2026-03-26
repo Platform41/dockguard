@@ -24,3 +24,6 @@ go.work.sum
 
 # Local overrides
 /dockguard.yaml
+
+# Optional local system tooling
+/.os/
