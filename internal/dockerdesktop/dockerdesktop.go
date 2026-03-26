@@ -52,6 +52,9 @@ func IsRunning() (bool, error) {
 		if isUnsupportedDesktopCLIError(err) {
 			return false, fmt.Errorf("docker desktop status not supported; Docker Desktop 4.37+ required: %w", err)
 		}
+		if isDesktopNotRunningOutput(output) {
+			return false, nil
+		}
 		return false, err
 	}
 
@@ -83,9 +86,9 @@ func runStatusCommand(name string, args ...string) (string, error) {
 	if err != nil {
 		message := strings.TrimSpace(string(output))
 		if message != "" {
-			return "", fmt.Errorf("%w: %s", err, message)
+			return string(output), fmt.Errorf("%w: %s", err, message)
 		}
-		return "", err
+		return string(output), err
 	}
 
 	return string(output), nil
@@ -101,6 +104,18 @@ func isUnsupportedDesktopCLIError(err error) bool {
 		return true
 	}
 	if strings.Contains(message, "is not a docker command") && strings.Contains(message, "desktop") {
+		return true
+	}
+
+	return false
+}
+
+func isDesktopNotRunningOutput(output string) bool {
+	message := strings.ToLower(output)
+	if strings.Contains(message, "could not retrieve status") && strings.Contains(message, "docker desktop") {
+		return true
+	}
+	if strings.Contains(message, "is docker desktop running") {
 		return true
 	}
 

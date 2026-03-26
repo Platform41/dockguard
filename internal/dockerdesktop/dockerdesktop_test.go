@@ -247,6 +247,30 @@ func TestIsRunningReturnsFalseWhenStatusStopped(t *testing.T) {
 	}
 }
 
+func TestIsRunningReturnsFalseWhenStatusCommandErrorsForStopped(t *testing.T) {
+	originalLookPath := lookPath
+	originalRunStatus := runStatus
+	t.Cleanup(func() {
+		lookPath = originalLookPath
+		runStatus = originalRunStatus
+	})
+
+	lookPath = func(file string) (string, error) {
+		return "/usr/local/bin/" + file, nil
+	}
+	runStatus = func(name string, args ...string) (string, error) {
+		return "Could not retrieve status. Is Docker Desktop running?\nYou can start Docker Desktop by running 'docker desktop start'.\n", errors.New("exit status 1")
+	}
+
+	running, err := IsRunning()
+	if err != nil {
+		t.Fatalf("IsRunning() error = %v", err)
+	}
+	if running {
+		t.Fatal("IsRunning() = true, want false")
+	}
+}
+
 func TestIsRunningReturnsErrorWhenStatusMissing(t *testing.T) {
 	originalLookPath := lookPath
 	originalRunStatus := runStatus
