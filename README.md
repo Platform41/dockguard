@@ -66,6 +66,7 @@ Out of scope:
 - `dockguard status [--config path]`: report readiness and key environment state
 - `dockguard check [--config path]`: run all required preflight validations
 - `dockguard start [--config path]`: run checks, then start Docker Desktop only if safe
+- `dockguard stop [--config path] [--eject]`: stop Docker Desktop and optionally eject the configured external mount
 
 If `--config` is omitted, DockGuard looks for `./dockguard.yaml` and falls back to built-in defaults when that file is absent.
 
@@ -78,6 +79,8 @@ If `--config` is omitted, DockGuard looks for `./dockguard.yaml` and falls back 
 ## Configuration
 
 See `examples/dockguard.yaml` for the intended config shape.
+
+For a full end-to-end user setup (external SSD format, rollback backup, native binary install, user-level config path, and safe stop/eject flow), see `docs/docker-local-setup.md`.
 
 Expected config inputs:
 

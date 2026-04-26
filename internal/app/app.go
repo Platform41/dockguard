@@ -8,31 +8,40 @@ import (
 	"github.com/platform41/dockguard/internal/config"
 	"github.com/platform41/dockguard/internal/dockerdesktop"
 	"github.com/platform41/dockguard/internal/output"
+	"github.com/platform41/dockguard/internal/platform"
 )
 
+type options struct {
+	Command    string
+	ConfigPath string
+	Eject      bool
+}
+
 func Run(args []string) (int, error) {
-	command, configPath, err := parseArgs(args)
+	opts, err := parseArgs(args)
 	if err != nil {
 		return 1, err
 	}
 
-	if command == "" {
+	if opts.Command == "" {
 		output.PrintUsage()
 		return 1, nil
 	}
 
-	cfg, err := config.Load(configPath)
+	cfg, err := config.Load(opts.ConfigPath)
 	if err != nil {
 		return 1, fmt.Errorf("load config: %w", err)
 	}
 
-	switch command {
+	switch opts.Command {
 	case "status":
 		return runStatus(cfg)
 	case "check":
 		return runCheck(cfg)
 	case "start":
 		return runStart(cfg)
+	case "stop":
+		return runStop(cfg, opts.Eject)
 	case "help", "--help", "-h":
 		output.PrintUsage()
 		return 0, nil
@@ -41,26 +50,32 @@ func Run(args []string) (int, error) {
 	}
 }
 
-func parseArgs(args []string) (command string, configPath string, err error) {
+func parseArgs(args []string) (options, error) {
 	if len(args) == 0 {
-		return "", "", nil
+		return options{}, nil
 	}
 
-	command = args[0]
+	opts := options{Command: args[0]}
 	for i := 1; i < len(args); i++ {
 		switch args[i] {
 		case "--config":
 			if i+1 >= len(args) {
-				return "", "", errors.New("--config requires a path")
+				return options{}, errors.New("--config requires a path")
 			}
-			configPath = args[i+1]
+			opts.ConfigPath = args[i+1]
 			i++
+		case "--eject":
+			opts.Eject = true
 		default:
-			return "", "", fmt.Errorf("unknown argument %q", args[i])
+			return options{}, fmt.Errorf("unknown argument %q", args[i])
 		}
 	}
 
-	return command, configPath, nil
+	if opts.Eject && opts.Command != "stop" {
+		return options{}, errors.New("--eject is only supported with the stop command")
+	}
+
+	return opts, nil
 }
 
 func runStatus(cfg config.Config) (int, error) {
@@ -93,5 +108,22 @@ func runStart(cfg config.Config) (int, error) {
 	}
 
 	output.PrintStarted()
+	return 0, nil
+}
+
+func runStop(cfg config.Config, eject bool) (int, error) {
+	if err := dockerdesktop.Stop(); err != nil {
+		return 1, err
+	}
+
+	output.PrintStopped()
+
+	if eject {
+		if err := platform.EjectVolume(cfg.ExternalMountPath); err != nil {
+			return 1, err
+		}
+		output.PrintEjected(cfg.ExternalMountPath)
+	}
+
 	return 0, nil
 }

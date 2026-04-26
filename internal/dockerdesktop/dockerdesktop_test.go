@@ -290,3 +290,82 @@ func TestIsRunningReturnsErrorWhenStatusMissing(t *testing.T) {
 		t.Fatal("IsRunning() error = nil, want error")
 	}
 }
+
+func TestStopRunsDockerDesktopStop(t *testing.T) {
+	originalLookPath := lookPath
+	originalRunCmd := runCmd
+	t.Cleanup(func() {
+		lookPath = originalLookPath
+		runCmd = originalRunCmd
+	})
+
+	lookPath = func(file string) (string, error) {
+		if file != "docker" {
+			t.Fatalf("lookPath called with %q", file)
+		}
+		return "/usr/local/bin/" + file, nil
+	}
+
+	called := false
+	runCmd = func(name string, args ...string) error {
+		called = true
+		if name != "docker" {
+			t.Fatalf("runCmd name = %q", name)
+		}
+		if len(args) != 2 || args[0] != "desktop" || args[1] != "stop" {
+			t.Fatalf("runCmd args = %#v", args)
+		}
+		return nil
+	}
+
+	if err := Stop(); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+
+	if !called {
+		t.Fatal("runCmd was not called")
+	}
+}
+
+func TestStopReturnsNilWhenAlreadyStopped(t *testing.T) {
+	originalLookPath := lookPath
+	originalRunCmd := runCmd
+	t.Cleanup(func() {
+		lookPath = originalLookPath
+		runCmd = originalRunCmd
+	})
+
+	lookPath = func(file string) (string, error) {
+		return "/usr/local/bin/" + file, nil
+	}
+
+	runCmd = func(name string, args ...string) error {
+		return errors.New("exit status 1: Docker Desktop is not running")
+	}
+
+	if err := Stop(); err != nil {
+		t.Fatalf("Stop() error = %v, want nil", err)
+	}
+}
+
+func TestStopFailsWhenDockerCLIIsMissing(t *testing.T) {
+	originalLookPath := lookPath
+	originalRunCmd := runCmd
+	t.Cleanup(func() {
+		lookPath = originalLookPath
+		runCmd = originalRunCmd
+	})
+
+	lookPath = func(file string) (string, error) {
+		return "", exec.ErrNotFound
+	}
+
+	runCmd = func(name string, args ...string) error {
+		t.Fatal("runCmd should not be called when docker is missing")
+		return nil
+	}
+
+	if err := Stop(); err == nil {
+		t.Fatal("Stop() error = nil, want error")
+	}
+}

@@ -4,6 +4,18 @@ This guide standardizes host-side Docker Desktop setup when Docker storage is pl
 
 Use this for machine setup and recovery. Use DockGuard for project preflight checks before starting Docker Desktop.
 
+## Quick Path (Recommended)
+
+1. Install DockGuard binary with `go install ./cmd/dockguard`.
+2. Store config at `~/.config/dockguard/dockguard.yaml`.
+3. Set:
+   - `external_mount_path: /Volumes/DockerSSD`
+   - `docker_storage_path: /Volumes/DockerSSD/docker-data/DockerDesktop`
+4. Run with explicit config:
+   - `dockguard status --config ~/.config/dockguard/dockguard.yaml`
+   - `dockguard start --config ~/.config/dockguard/dockguard.yaml`
+   - `dockguard stop --config ~/.config/dockguard/dockguard.yaml --eject`
+
 ## Scope and Responsibility
 
 - Docker Desktop app settings, disk format, and storage location are host-level operations.
@@ -55,6 +67,71 @@ diskutil info /Volumes/DockerSSD
 ```bash
 mkdir -p /Volumes/DockerSSD/docker-data
 mkdir -p /Volumes/DockerSSD/docker-rollback
+```
+
+## 2.5) Install DockGuard as a Native Command
+
+From repository root:
+
+```bash
+go install ./cmd/dockguard
+```
+
+Ensure Go bin is on your PATH (zsh):
+
+```bash
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Verify:
+
+```bash
+which dockguard
+dockguard --help
+```
+
+## 2.6) Create a User-Level DockGuard Config
+
+Create a reusable config directory:
+
+```bash
+mkdir -p ~/.config/dockguard
+```
+
+Create `~/.config/dockguard/dockguard.yaml`:
+
+```yaml
+external_mount_path: /Volumes/DockerSSD
+docker_storage_path: /Volumes/DockerSSD/docker-data/DockerDesktop
+minimum_free_space_gb: 100
+
+docker_desktop:
+  settings_path: ~/Library/Group Containers/group.com.docker/settings-store.json
+  require_cli_start_support: true
+  fail_if_already_running: false
+```
+
+Run with explicit config:
+
+```bash
+dockguard status --config ~/.config/dockguard/dockguard.yaml
+dockguard start --config ~/.config/dockguard/dockguard.yaml
+dockguard stop --config ~/.config/dockguard/dockguard.yaml --eject
+```
+
+Optional shell alias:
+
+```bash
+alias dg='dockguard --config ~/.config/dockguard/dockguard.yaml'
+```
+
+Then use:
+
+```bash
+dg status
+dg start
+dg stop --eject
 ```
 
 ## 3) Backup Current Docker Desktop Disk Image (Rollback)
@@ -118,6 +195,7 @@ If startup or data behavior becomes unstable:
 - Do not unplug the SSD while Docker Desktop is running.
 - Keep free space above your DockGuard threshold (recommended 50 GB or higher).
 - Use DockGuard (`dockguard status`, `dockguard check`, `dockguard start`) before development sessions.
+- Before disconnecting the SSD, run `dockguard stop --eject`.
 
 ## Troubleshooting
 

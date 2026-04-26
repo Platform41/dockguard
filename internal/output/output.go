@@ -20,6 +20,7 @@ func PrintUsage() {
 	fmt.Println("  dockguard status [--config path]")
 	fmt.Println("  dockguard check [--config path]")
 	fmt.Println("  dockguard start [--config path]")
+	fmt.Println("  dockguard stop [--config path] [--eject]")
 }
 
 func PrintStatus(status checks.Status) {
@@ -45,6 +46,14 @@ func PrintCheckResult(result checks.Result) {
 
 func PrintStarted() {
 	fmt.Println("Docker Desktop start requested.")
+}
+
+func PrintStopped() {
+	fmt.Println("Docker Desktop stop requested.")
+}
+
+func PrintEjected(path string) {
+	fmt.Printf("External volume ejected: %s\n", path)
 }
 
 func formatState(ok bool) string {
