@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/platform41/dockguard/internal/config"
@@ -234,8 +235,8 @@ func collectSettingsPaths(value any, paths *[]string) {
 }
 
 func isStoragePathKey(key string) bool {
-	switch key {
-	case "diskImageLocation", "diskImagePath", "dataFolder", "storagePath", "virtualMachineDiskPath":
+	switch strings.ToLower(key) {
+	case "diskimagelocation", "diskimagepath", "datafolder", "storagepath", "virtualmachinediskpath":
 		return true
 	default:
 		return false

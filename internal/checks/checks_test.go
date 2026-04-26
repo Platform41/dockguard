@@ -146,11 +146,11 @@ func TestRunPreflightFailsWhenDockerDesktopIsAlreadyRunning(t *testing.T) {
 
 func TestExtractSettingsPathsCollectsNestedKeys(t *testing.T) {
 	content := []byte(`{
-  "diskImageLocation": "/Volumes/External/DockerDesktop",
-  "nested": {
-    "dataFolder": "/Volumes/External/Data",
-    "more": [{"storagePath": "/Volumes/External/Storage"}]
-  }
+	"DiskImageLocation": "/Volumes/External/DockerDesktop",
+	"nested": {
+	  "DataFolder": "/Volumes/External/Data",
+	  "more": [{"storagePath": "/Volumes/External/Storage"}]
+	}
 }`)
 
 	paths, err := extractSettingsPaths(content)
@@ -173,5 +173,42 @@ func TestExtractSettingsPathsCollectsNestedKeys(t *testing.T) {
 		if !seen[path] {
 			t.Fatalf("expected path %q in results, got %#v", path, paths)
 		}
+	}
+}
+
+func TestRunPreflightSuccessWithUppercaseSettingsKey(t *testing.T) {
+	originalIsRunning := isDockerDesktopRunning
+	t.Cleanup(func() {
+		isDockerDesktopRunning = originalIsRunning
+	})
+	isDockerDesktopRunning = func() (bool, error) {
+		return false, nil
+	}
+
+	mountPath := t.TempDir()
+	storagePath := filepath.Join(mountPath, "DockerDesktop")
+	settingsPath := filepath.Join(t.TempDir(), "settings-store.json")
+
+	if err := os.Mkdir(storagePath, 0o755); err != nil {
+		t.Fatalf("mkdir storage path: %v", err)
+	}
+
+	content := `{"DataFolder": "` + storagePath + `"}`
+	if err := os.WriteFile(settingsPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	cfg := config.Config{
+		ExternalMountPath:  mountPath,
+		DockerStoragePath:  storagePath,
+		MinimumFreeSpaceGB: 1,
+		DockerDesktopConfig: config.DockerDesktopConfig{
+			SettingsPath: settingsPath,
+		},
+	}
+
+	result := RunPreflight(cfg)
+	if !result.OK {
+		t.Fatalf("RunPreflight() OK = false, items = %#v", result.Items)
 	}
 }
