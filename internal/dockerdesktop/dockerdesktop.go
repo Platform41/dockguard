@@ -42,19 +42,24 @@ func Start(cfg config.Config) error {
 	return nil
 }
 
-func Stop() error {
+func Stop() (bool, error) {
 	if _, err := lookPath("docker"); err != nil {
-		return fmt.Errorf("docker CLI not found in PATH: %w", err)
+		return false, fmt.Errorf("docker CLI not found in PATH: %w", err)
+	}
+
+	running, err := IsRunning()
+	if err == nil && !running {
+		return false, nil
 	}
 
 	if err := runCmd("docker", "desktop", "stop"); err != nil {
 		if isDesktopAlreadyStoppedError(err) {
-			return nil
+			return false, nil
 		}
-		return fmt.Errorf("stop Docker Desktop with docker desktop stop: %w", err)
+		return false, fmt.Errorf("stop Docker Desktop with docker desktop stop: %w", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 func IsRunning() (bool, error) {

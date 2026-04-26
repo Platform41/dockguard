@@ -294,9 +294,11 @@ func TestIsRunningReturnsErrorWhenStatusMissing(t *testing.T) {
 func TestStopRunsDockerDesktopStop(t *testing.T) {
 	originalLookPath := lookPath
 	originalRunCmd := runCmd
+	originalRunStatus := runStatus
 	t.Cleanup(func() {
 		lookPath = originalLookPath
 		runCmd = originalRunCmd
+		runStatus = originalRunStatus
 	})
 
 	lookPath = func(file string) (string, error) {
@@ -307,6 +309,9 @@ func TestStopRunsDockerDesktopStop(t *testing.T) {
 	}
 
 	called := false
+	runStatus = func(name string, args ...string) (string, error) {
+		return "Status running\n", nil
+	}
 	runCmd = func(name string, args ...string) error {
 		called = true
 		if name != "docker" {
@@ -318,8 +323,12 @@ func TestStopRunsDockerDesktopStop(t *testing.T) {
 		return nil
 	}
 
-	if err := Stop(); err != nil {
+	requested, err := Stop()
+	if err != nil {
 		t.Fatalf("Stop() error = %v", err)
+	}
+	if !requested {
+		t.Fatal("Stop() requested = false, want true")
 	}
 
 	if !called {
@@ -330,30 +339,42 @@ func TestStopRunsDockerDesktopStop(t *testing.T) {
 func TestStopReturnsNilWhenAlreadyStopped(t *testing.T) {
 	originalLookPath := lookPath
 	originalRunCmd := runCmd
+	originalRunStatus := runStatus
 	t.Cleanup(func() {
 		lookPath = originalLookPath
 		runCmd = originalRunCmd
+		runStatus = originalRunStatus
 	})
 
 	lookPath = func(file string) (string, error) {
 		return "/usr/local/bin/" + file, nil
 	}
-
-	runCmd = func(name string, args ...string) error {
-		return errors.New("exit status 1: Docker Desktop is not running")
+	runStatus = func(name string, args ...string) (string, error) {
+		return "Status stopped\n", nil
 	}
 
-	if err := Stop(); err != nil {
+	runCmd = func(name string, args ...string) error {
+		t.Fatal("runCmd should not be called when Docker Desktop is already stopped")
+		return nil
+	}
+
+	requested, err := Stop()
+	if err != nil {
 		t.Fatalf("Stop() error = %v, want nil", err)
+	}
+	if requested {
+		t.Fatal("Stop() requested = true, want false")
 	}
 }
 
 func TestStopFailsWhenDockerCLIIsMissing(t *testing.T) {
 	originalLookPath := lookPath
 	originalRunCmd := runCmd
+	originalRunStatus := runStatus
 	t.Cleanup(func() {
 		lookPath = originalLookPath
 		runCmd = originalRunCmd
+		runStatus = originalRunStatus
 	})
 
 	lookPath = func(file string) (string, error) {
@@ -364,8 +385,12 @@ func TestStopFailsWhenDockerCLIIsMissing(t *testing.T) {
 		t.Fatal("runCmd should not be called when docker is missing")
 		return nil
 	}
+	runStatus = func(name string, args ...string) (string, error) {
+		t.Fatal("runStatus should not be called when docker is missing")
+		return "", nil
+	}
 
-	if err := Stop(); err == nil {
+	if _, err := Stop(); err == nil {
 		t.Fatal("Stop() error = nil, want error")
 	}
 }

@@ -52,6 +52,10 @@ func PrintStopped() {
 	fmt.Println("Docker Desktop stop requested.")
 }
 
+func PrintAlreadyStopped() {
+	fmt.Println("Docker Desktop is already stopped.")
+}
+
 func PrintEjected(path string) {
 	fmt.Printf("External volume ejected: %s\n", path)
 }

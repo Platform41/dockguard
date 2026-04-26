@@ -112,11 +112,15 @@ func runStart(cfg config.Config) (int, error) {
 }
 
 func runStop(cfg config.Config, eject bool) (int, error) {
-	if err := dockerdesktop.Stop(); err != nil {
+	stopRequested, err := dockerdesktop.Stop()
+	if err != nil {
 		return 1, err
 	}
-
-	output.PrintStopped()
+	if stopRequested {
+		output.PrintStopped()
+	} else {
+		output.PrintAlreadyStopped()
+	}
 
 	if eject {
 		if err := platform.EjectVolume(cfg.ExternalMountPath); err != nil {
