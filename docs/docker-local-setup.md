@@ -91,6 +91,16 @@ which dockguard
 dockguard --help
 ```
 
+If `dockguard` is still not found, check install paths:
+
+```bash
+go env GOBIN
+go env GOPATH
+ls "$(go env GOPATH)/bin" | grep dockguard
+```
+
+When `GOBIN` is empty, binaries are installed to `$(go env GOPATH)/bin`.
+
 ## 2.6) Create a User-Level DockGuard Config
 
 Create a reusable config directory:

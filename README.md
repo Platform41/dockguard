@@ -21,6 +21,36 @@ From source (Go 1.21+):
 go install ./cmd/dockguard
 ```
 
+If `dockguard` is not found after install, verify where Go installed it:
+
+```bash
+go env GOBIN
+go env GOPATH
+ls "$(go env GOPATH)/bin" | grep dockguard
+```
+
+If `GOBIN` is empty, add `$(go env GOPATH)/bin` to your shell `PATH`:
+
+```bash
+echo 'export PATH="$(go env GOPATH)/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+hash -r
+which dockguard
+dockguard --help
+```
+
+Recommended user-level config location:
+
+```text
+~/.config/dockguard/dockguard.yaml
+```
+
+Optional alias:
+
+```bash
+alias dg='dockguard --config ~/.config/dockguard/dockguard.yaml'
+```
+
 Build a local binary:
 
 ```bash
