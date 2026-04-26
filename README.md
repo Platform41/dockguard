@@ -45,11 +45,15 @@ Recommended user-level config location:
 ~/.config/dockguard/dockguard.yaml
 ```
 
-Optional alias:
+Optional shell function (recommended over alias):
 
 ```bash
-alias dg='dockguard --config ~/.config/dockguard/dockguard.yaml'
+dg() {
+  dockguard "$1" --config "$HOME/.config/dockguard/dockguard.yaml" "${@:2}"
+}
 ```
+
+Add this to `~/.zshrc`, then reload with `source ~/.zshrc`.
 
 Build a local binary:
 

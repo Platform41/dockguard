@@ -130,10 +130,18 @@ dockguard start --config ~/.config/dockguard/dockguard.yaml
 dockguard stop --config ~/.config/dockguard/dockguard.yaml --eject
 ```
 
-Optional shell alias:
+Optional shell function (recommended over alias):
 
 ```bash
-alias dg='dockguard --config ~/.config/dockguard/dockguard.yaml'
+dg() {
+  dockguard "$1" --config "$HOME/.config/dockguard/dockguard.yaml" "${@:2}"
+}
+```
+
+Set this in `~/.zshrc`, then reload:
+
+```bash
+source ~/.zshrc
 ```
 
 Then use:
