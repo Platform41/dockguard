@@ -44,6 +44,14 @@
 
 ### Backlog
 
+- [ ] `[v0.4.0] Name the processes holding the drive when eject fails as busy`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** When macOS refuses the eject as busy, the message lists the processes (name and PID) with files open on the drive, instead of only generic advice
+  **Source docs:** `docs/specs/multi-target.md` §2.3
+  **Dependencies:** v0.3.0
+  **Notes:** Found in the v0.3.0 live check: every target was confirmed stopped, but Chrome held one file inside `Xcode.app` on the drive (macOS loads share extensions for the Share menu). One `lsof` call identified it.
+
 - [ ] `[v0.4.0] container kind (Fizzy) and stop --all --eject`
   **Owner:** Three
   **Priority:** P3
@@ -59,13 +67,6 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.3.0] Release: notes, CHANGELOG, live check, tag`
-  **Owner:** One
-  **Priority:** P1
-  **Branch:** `chore/release-v0.3.0`
-  **Deliverable:** `docs/releases/v0.3.0.md`, dated CHANGELOG, tag `v0.3.0`
-  **Waiting on:** Live check from the internal disk with Docker, Xcode and a PostgreSQL cluster configured: start and stop each, and confirm `stop --eject` refuses while any is running. Tag after merge.
-
 ### Blocked
 
 - [ ] `[Phase 4] Validate Docker Desktop CLI behavior on target machine`
@@ -76,6 +77,14 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.3.0] Release: notes, CHANGELOG, live check, tag`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-11-08
+  **Branch:** `chore/release-v0.3.0` (PR #8)
+  **Deliverable:** `docs/releases/v0.3.0.md`, tag `v0.3.0`
+  **Notes:** Live check passed from the internal disk with a real config (Docker, Xcode, a PostgreSQL 17 cluster): each started and stopped; `stop --eject` refused while Xcode ran and ejected once every target was confirmed stopped. The first eject attempt was busy because Chrome held a Simulator share-extension file inside `Xcode.app` on the drive; quitting Chrome cleared it.
 
 - [x] `[v0.3.0] postgres kind (pg_ctl clusters)`
   **Owner:** Three
