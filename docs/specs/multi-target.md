@@ -34,13 +34,13 @@ Format: `dockguard <action> [target] [flags]` (D-006). Every command accepts `--
 
 | Command | Does | Exit code |
 | --- | --- | --- |
-| `dockguard list` | Lists the configured targets: name, kind, running or stopped, and its main path on the drive. Runs no checks, so it's fast. | 0, or 1 if the config is invalid |
+| `dockguard list` | Lists the configured targets: name, kind, state (§2.2) and its main path on the drive. Runs no checks, so it's fast. | 0, or 1 if the config is invalid |
 | `dockguard status` | `list` plus the full checks for every target. Shows the drive once at the top. | 0 if every target is ready, else 1 |
 | `dockguard check <target>` | Runs that target's checks | 0 if all pass, else 1 |
 | `dockguard start <target>` | Runs the checks, then starts the target only if they pass | 0 if started, else 1 |
 | `dockguard stop <target>` | Stops the target. If it's already stopped, says so and exits 0 | 0, or 1 on error |
-| `dockguard stop <target> --eject` | Stops the target, then ejects the drive. **Refuses to eject** while any other target on the drive is running, and names those targets. | 0 if ejected, else 1 |
-| `dockguard stop --all [--eject]` | Stops every running target in reverse config order, then ejects if asked (v0.4.0) | 0, or 1 if any stop failed (no eject then) |
+| `dockguard stop <target> --eject` | Stops the target, then ejects the drive only under the eject rule (§2.3) | 0 if ejected, else 1 |
+| `dockguard stop --all [--eject]` | Runs stop for every target that isn't confirmed `stopped` (running, partial or unknown), in reverse config order, then ejects only under the eject rule (§2.3; v0.4.0) | 0 if all stopped (and ejected, if asked), else 1 |
 | `dockguard help` | Usage | 0 |
 
 **Compatibility with v0.1:** `check`, `start` and `stop` with no target mean `docker`. Existing
@@ -64,13 +64,38 @@ Drive:  /Volumes/ExternalSSD (mounted)
 NAME        KIND            STATE     PATH
 docker      docker-desktop  running   /Volumes/ExternalSSD/docker-data/DockerDesktop
 xcode       app             stopped   ~/Library/Developer/Xcode/DerivedData -> /Volumes/ExternalSSD/...
-myapp-db  postgres        running   /Volumes/ExternalSSD/pgdata/myapp
+myapp-db    postgres        running   /Volumes/ExternalSSD/pgdata/myapp
 fizzy       container       running   /Volumes/ExternalSSD/container-data
 ```
 
 If the drive isn't mounted, `list` still lists the targets and shows `drive not mounted` as their
-state. When DockGuard can't find out whether a target is running, the state is `unknown`, never a
-guess.
+state.
+
+### 2.2 Target states
+
+| State | Meaning |
+| --- | --- |
+| `running` | The probe confirms the target is fully running |
+| `partial` | The probe confirms some of it is running and some isn't (a container stack with only some containers up) |
+| `stopped` | The probe confirms nothing of the target is running |
+| `unknown` | The probe failed or its answer couldn't be read; `list` and `status` show the reason. Never a guess. |
+
+Only `stopped` counts as stopped. `partial` and `unknown` are treated as possibly using the drive.
+
+### 2.3 Eject rule
+
+DockGuard ejects the drive only when **every configured target is confirmed `stopped`**:
+
+1. Run the requested stop commands (one target, or all with `--all`).
+2. Probe every configured target again. A target that was just stopped is re-probed for up to 30
+   seconds, until it reports `stopped`.
+3. Eject only if every target is now `stopped`. Otherwise refuse, exit 1, and list each target
+   that blocked the eject with its state and, for `unknown`, the probe error.
+
+A stop command reporting success isn't enough; only the fresh probe counts. There is no flag to
+override the rule: someone who wants to eject anyway can use Finder or `diskutil`, outside
+DockGuard's guarantee. If the drive is still busy after all targets are stopped (a process outside
+DockGuard's config), the v0.1 busy-volume message and retry still apply.
 
 ---
 
@@ -208,8 +233,8 @@ can follow the same pattern if one is ever needed; Fizzy's MySQL is a container 
 | Optional keys | `data_path`, `fail_if_already_running` (default true) |
 | Checks | `up` and `down` exist and are executable; `container` is on the PATH; `data_path` exists on the drive; Apple container's data folder (`~/Library/Application Support/com.apple.container`) resolves to the drive |
 | Start | Runs `up` |
-| Stop | Runs `down` |
-| Running | Every name in `containers` is running (`container list`) |
+| Stop | Runs `down`, also when the stack is `partial` |
+| State | From `container list`: `running` if every name in `containers` is running, `stopped` if none is, `partial` if only some are, `unknown` if the list can't be read |
 
 **Fizzy at login (D-014):** the launchd agent that runs `fizzy-up.sh` at
 login is removed. Fizzy starts with `dockguard start fizzy` instead, so it never
@@ -260,7 +285,7 @@ type Target interface {
     Kind() string
     MainPath() string                 // shown by list
     Checks() []checks.Item            // preflight, without the already-running guard
-    IsRunning() (State, error)        // Running, Stopped or Unknown
+    State() (State, error)            // Running, Partial, Stopped or Unknown (§2.2); error explains Unknown
     Start() error
     Stop() (stopped bool, err error)  // false if it was already stopped
 }
@@ -280,7 +305,8 @@ replace them (as `dockerdesktop` does today). Other operating systems would be a
 2. `Target` interface and registry; Docker Desktop moved onto it with **no change in behaviour**
    apart from the already-running rule (§2)
 3. `list`; `status` across all targets; target argument on `check`, `start` and `stop`
-4. Eject refuses while another target on the drive is running
+4. The eject rule (§2.3): eject only when every target is confirmed `stopped`, re-probed after
+   stopping
 5. Generic defaults and docs (D-012)
 6. Config lookup with `~/.config/dockguard/dockguard.yaml`; `list` and `status` name the file
    (D-015)
@@ -324,6 +350,11 @@ release notes, tag after One's review.
 - **AS-09** Given an unknown target name, then the command fails, lists the valid names and exits 1.
 - **AS-10** Given another target on the drive is running, when I run `dockguard stop docker
   --eject`, then Docker stops, the drive isn't ejected, and the running targets are named.
+- **AS-27** Given a target's state probe fails (for example its command errors or its output
+  can't be read), then `list` shows it as `unknown` with the reason, and `stop docker --eject`
+  stops Docker but doesn't eject, naming that target and the probe error.
+- **AS-28** Given `docker desktop stop` reports success but Docker still reports running 30 seconds
+  later, then `stop docker --eject` doesn't eject and says Docker is still running.
 - **AS-21** Given no `--config` and no `./dockguard.yaml`, when I run `dockguard list` from any
   folder, then it reads `~/.config/dockguard/dockguard.yaml` and prints that path.
 - **AS-22** Given no config file anywhere, when I run `dockguard list`, then it fails and names the
@@ -356,6 +387,11 @@ release notes, tag after One's review.
 
 - **AS-18** Given the Fizzy containers are running, then `list` shows `fizzy` as running.
 - **AS-24** Given I log in with the drive unplugged, then nothing tries to start Fizzy.
+- **AS-29** Given `fizzy-db` is running and `fizzy-app` isn't, then `list` shows `fizzy` as
+  `partial`, `stop docker --eject` refuses to eject and names `fizzy`, and `stop --all --eject`
+  runs Fizzy's `down`, confirms both containers stopped, then ejects.
+- **AS-30** Given a target stays `unknown` after `stop --all`, then the drive isn't ejected and the
+  target is named with its probe error.
 - **AS-19** Given Docker, Postgres and Fizzy are running, when I run `dockguard stop --all
   --eject`, then they stop in reverse config order and the drive is ejected.
 - **AS-20** Given one target fails to stop, then `stop --all --eject` doesn't eject and names the

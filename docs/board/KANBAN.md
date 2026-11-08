@@ -58,10 +58,10 @@
   **Source docs:** `docs/specs/multi-target.md` §2, §3 (config lookup, D-015)
   **Dependencies:** Target layer
 
-- [ ] `[v0.2.0] Eject refuses while another target on the drive is running`
+- [ ] `[v0.2.0] Eject rule: eject only when every target is confirmed stopped`
   **Owner:** Three
   **Priority:** P1
-  **Outcome:** AS-10
+  **Outcome:** AS-10, AS-27, AS-28
   **Source docs:** `docs/specs/multi-target.md` §2
   **Dependencies:** Target layer
 
@@ -82,7 +82,7 @@
 - [ ] `[v0.4.0] container kind (Fizzy) and stop --all --eject`
   **Owner:** Three
   **Priority:** P3
-  **Outcome:** AS-18 to AS-20
+  **Outcome:** AS-18 to AS-20, AS-24, AS-29, AS-30
   **Source docs:** `docs/specs/multi-target.md` §4.4
   **Dependencies:** v0.3.0. Includes removing Fizzy's launchd agent (D-014, AS-24)
 
