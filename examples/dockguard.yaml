@@ -1,11 +1,16 @@
-# Example DockGuard configuration for a macOS Docker Desktop setup
-# where Docker Desktop storage is hosted on an external SSD.
+# Example DockGuard config. Copy it to ~/.config/dockguard/dockguard.yaml and set your paths.
+# This file is the record of which applications DockGuard manages on the external drive.
 
-external_mount_path: /Volumes/DockerSSD
-docker_storage_path: /Volumes/DockerSSD/DockerDesktop
-minimum_free_space_gb: 50
+drive: /Volumes/ExternalSSD
+minimum_free_space_gb: 50        # default for every target
 
-docker_desktop:
-  settings_path: ~/Library/Application Support/Docker/settings-store.json
-  require_cli_start_support: true
-  fail_if_already_running: true
+targets:
+  docker:
+    kind: docker-desktop
+    storage_path: /Volumes/ExternalSSD/docker-data/DockerDesktop
+    # settings_path: ~/Library/Application Support/Docker/settings-store.json   # auto-detected if omitted
+    require_cli_start_support: true
+    fail_if_already_running: true
+    # minimum_free_space_gb: 100  # per-target override
+
+# Planned kinds (docs/specs/multi-target.md): app and postgres in v0.3.0, container in v0.4.0.

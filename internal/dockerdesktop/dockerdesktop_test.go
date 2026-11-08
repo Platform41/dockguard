@@ -5,8 +5,6 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-
-	"github.com/platform41/dockguard/internal/config"
 )
 
 func TestStartRunsDockerDesktopStart(t *testing.T) {
@@ -42,7 +40,7 @@ func TestStartRunsDockerDesktopStart(t *testing.T) {
 		return "", nil
 	}
 
-	if err := Start(config.Config{}); err != nil {
+	if err := Start(StartOptions{}); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 
@@ -74,7 +72,7 @@ func TestStartFailsWhenDockerCLIIsMissing(t *testing.T) {
 		return "", nil
 	}
 
-	err := Start(config.Config{})
+	err := Start(StartOptions{})
 	if err == nil {
 		t.Fatal("Start() error = nil, want error")
 	}
@@ -101,10 +99,8 @@ func TestStartReturnsWrappedCommandError(t *testing.T) {
 		return "", nil
 	}
 
-	err := Start(config.Config{
-		DockerDesktopConfig: config.DockerDesktopConfig{
-			RequireCLIStartSupport: true,
-		},
+	err := Start(StartOptions{
+		RequireCLIStartSupport: true,
 	})
 	if err == nil {
 		t.Fatal("Start() error = nil, want error")
@@ -131,10 +127,8 @@ func TestStartReturnsUnsupportedDesktopCLIHints(t *testing.T) {
 	runStatus = func(name string, args ...string) (string, error) {
 		return "", nil
 	}
-	if err := Start(config.Config{
-		DockerDesktopConfig: config.DockerDesktopConfig{
-			RequireCLIStartSupport: true,
-		},
+	if err := Start(StartOptions{
+		RequireCLIStartSupport: true,
 	}); err == nil {
 		t.Fatal("Start() error = nil, want error")
 	} else if !strings.Contains(err.Error(), "not supported") {
@@ -165,10 +159,8 @@ func TestStartFailsWhenAlreadyRunning(t *testing.T) {
 		return "Name Value\nStatus running\n", nil
 	}
 
-	err := Start(config.Config{
-		DockerDesktopConfig: config.DockerDesktopConfig{
-			FailIfAlreadyRunning: true,
-		},
+	err := Start(StartOptions{
+		FailIfAlreadyRunning: true,
 	})
 	if err == nil {
 		t.Fatal("Start() error = nil, want error")
