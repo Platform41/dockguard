@@ -149,8 +149,23 @@ target: {}
 		{"planned kind", `
 drive: /Volumes/X
 targets:
-  db: {kind: postgres, data_dir: /x}
-`, []string{`kind "postgres" is planned for v0.3.0`}},
+  fizzy: {kind: container, up: /x, down: /y}
+`, []string{`kind "container" is planned for v0.4.0`}},
+		{"postgres without bin_dir", `
+drive: /Volumes/X
+targets:
+  db: {kind: postgres, data_dir: /Volumes/X/pgdata/db}
+`, []string{`missing required key "bin_dir"`}},
+		{"postgres without data_dir", `
+drive: /Volumes/X
+targets:
+  db: {kind: postgres, bin_dir: /opt/homebrew/opt/postgresql@17/bin}
+`, []string{`missing required key "data_dir"`}},
+		{"postgres port out of range", `
+drive: /Volumes/X
+targets:
+  db: {kind: postgres, data_dir: /x, bin_dir: /y, port: 70000}
+`, []string{"out of range"}},
 		{"app without app", `
 drive: /Volumes/X
 targets:
@@ -393,5 +408,68 @@ func TestExpandPathKeepsParentTraversal(t *testing.T) {
 	t.Setenv("HOME", home)
 	if got, want := expandPath("~/a/../b"), home+"/a/../b"; got != want {
 		t.Fatalf("expandPath = %q, want %q", got, want)
+	}
+}
+
+func TestLoadReadsPostgresTarget(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg, err := Parse([]byte(`
+drive: /Volumes/ExternalSSD
+minimum_free_space_gb: 20
+targets:
+  myapp-db:
+    kind: postgres
+    data_dir: /Volumes/ExternalSSD/pgdata/myapp
+    bin_dir: /opt/homebrew/opt/postgresql@17/bin
+    port: 55432
+    socket_dir: /tmp
+    log_file: /Volumes/ExternalSSD/pgdata/myapp.log
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := cfg.Targets[0]
+	pg := db.Postgres
+	if db.Kind != KindPostgres || !db.FailIfAlreadyRunning || db.MinimumFreeSpaceGB != 20 {
+		t.Fatalf("target = %#v", db)
+	}
+	if pg.DataDir != "/Volumes/ExternalSSD/pgdata/myapp" || pg.BinDir != "/opt/homebrew/opt/postgresql@17/bin" ||
+		pg.Port != 55432 || pg.SocketDir != "/tmp" || pg.LogFile != "/Volumes/ExternalSSD/pgdata/myapp.log" {
+		t.Fatalf("postgres = %#v", pg)
+	}
+}
+
+// Review on PR #7: a relative bin_dir like "." made Go search the PATH for pg_ctl. Paths in the
+// current format must be absolute or start with ~/.
+func TestRelativePathsAreRejected(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for _, entry := range []string{
+		"db: {kind: postgres, data_dir: /Volumes/X/db, bin_dir: .}",
+		"db: {kind: postgres, data_dir: pgdata/db, bin_dir: /opt/pg/bin}",
+		"db: {kind: postgres, data_dir: /Volumes/X/db, bin_dir: /opt/pg/bin, log_file: db.log}",
+		"docker: {kind: docker-desktop, storage_path: docker-data}",
+		"xcode: {kind: app, app: Xcode, symlink_paths: [DerivedData]}",
+	} {
+		_, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  " + entry + "\n"))
+		if err == nil || !strings.Contains(err.Error(), "absolute path") {
+			t.Fatalf("%s: error = %v, want an absolute-path error", entry, err)
+		}
+	}
+	if _, err := Parse([]byte("drive: Volumes/X\ntargets:\n  docker: {kind: docker-desktop, storage_path: /d}\n")); err == nil {
+		t.Fatal("relative drive accepted")
+	}
+	if _, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  db: {kind: postgres, data_dir: ~/pg/db, bin_dir: /opt/pg/bin}\n")); err != nil {
+		t.Fatalf("~/ path rejected: %v", err)
+	}
+}
+
+func TestPostgresLogFileDefaultsNextToDataDir(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  db: {kind: postgres, data_dir: /Volumes/X/pgdata/db, bin_dir: /opt/pg/bin}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Targets[0].Postgres.LogFile; got != "/Volumes/X/pgdata/db.log" {
+		t.Fatalf("LogFile = %q", got)
 	}
 }

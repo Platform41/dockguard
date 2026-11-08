@@ -44,13 +44,6 @@
 
 ### Backlog
 
-- [ ] `[v0.3.0] postgres kind (pg_ctl clusters)`
-  **Owner:** Three
-  **Priority:** P2
-  **Outcome:** AS-15 to AS-17, AS-23, AS-25, AS-26
-  **Source docs:** `docs/specs/multi-target.md` §4.3
-  **Dependencies:** v0.2.0 (D-016)
-
 - [ ] `[v0.4.0] container kind (Fizzy) and stop --all --eject`
   **Owner:** Three
   **Priority:** P3
@@ -66,13 +59,13 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.3.0] app kind (Xcode) from the June Xcode work`
+- [ ] `[v0.3.0] postgres kind (pg_ctl clusters)`
   **Owner:** Three
   **Priority:** P2
-  **Outcome:** AS-11 to AS-14
-  **Source docs:** `docs/specs/multi-target.md` §4.2, §11
-  **Dependencies:** v0.2.0; move the uncommitted Xcode work off the `master` checkout first
-  **Branch:** `feat/app-kind`
+  **Outcome:** AS-15 to AS-17, AS-23, AS-25, AS-26
+  **Source docs:** `docs/specs/multi-target.md` §4.3
+  **Dependencies:** v0.2.0 (D-016)
+  **Branch:** `feat/postgres-kind`
 
 ### Blocked
 
@@ -84,6 +77,16 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.3.0] app kind (Xcode) from the June Xcode work`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** AS-11 to AS-14
+  **Source docs:** `docs/specs/multi-target.md` §4.2, §11
+  **Dependencies:** v0.2.0; move the uncommitted Xcode work off the `master` checkout first
+  **Completed:** 2026-11-08
+  **Branch:** `feat/app-kind`
+  **Notes:** PR #6, merge `66ca771`.
 
 - [x] `[v0.2.0] Release: notes, CHANGELOG, live check, tag`
   **Owner:** One

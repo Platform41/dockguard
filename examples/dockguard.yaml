@@ -20,4 +20,12 @@ targets:
       - ~/Library/Developer/Xcode/DerivedData
     # Never list ~/Library/Developer/CoreSimulator/Devices: simulators break on an external drive.
 
-# Planned kinds (docs/specs/multi-target.md): postgres in v0.3.0, container in v0.4.0.
+  myapp-db:
+    kind: postgres                 # a cluster run with pg_ctl, not brew services
+    data_dir: /Volumes/ExternalSSD/pgdata/myapp
+    bin_dir: /opt/homebrew/opt/postgresql@17/bin   # required: the cluster's own version
+    port: 55432                    # optional
+    socket_dir: /tmp               # optional
+    log_file: /Volumes/ExternalSSD/pgdata/myapp.log   # optional; defaults to <data_dir>.log
+
+# Planned kind (docs/specs/multi-target.md): container in v0.4.0.

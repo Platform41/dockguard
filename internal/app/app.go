@@ -14,6 +14,7 @@ import (
 	"github.com/platform41/dockguard/internal/target"
 	appkind "github.com/platform41/dockguard/internal/target/app"
 	"github.com/platform41/dockguard/internal/target/dockerdesktop"
+	"github.com/platform41/dockguard/internal/target/postgres"
 )
 
 // defaultTarget is used by check, start and stop when no target is named (D-006).
@@ -147,6 +148,8 @@ func defaultBuildTargets(cfg config.Config) ([]entry, error) {
 			entries = append(entries, entry{t: dockerdesktop.New(t, cfg.Drive, cfg.Legacy), cfg: t})
 		case config.KindApp:
 			entries = append(entries, entry{t: appkind.New(t, cfg.Drive), cfg: t})
+		case config.KindPostgres:
+			entries = append(entries, entry{t: postgres.New(t, cfg.Drive), cfg: t})
 		default:
 			return nil, fmt.Errorf("target %q: kind %q is not supported", t.Name, t.Kind)
 		}
