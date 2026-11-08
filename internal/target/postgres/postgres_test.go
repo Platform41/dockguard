@@ -11,6 +11,7 @@ import (
 
 	"github.com/platform41/dockguard/internal/checks"
 	"github.com/platform41/dockguard/internal/config"
+	"github.com/platform41/dockguard/internal/pathutil"
 	"github.com/platform41/dockguard/internal/target"
 )
 
@@ -248,7 +249,7 @@ func TestStartArguments(t *testing.T) {
 	last := f.calls[len(f.calls)-1]
 	got := strings.Join(last.args, " ")
 	want := fmt.Sprintf("-D %s -l %s -o -p 55432 -k '/tmp' -w start", dataDir, tg.cfg.Postgres.LogFile)
-	if got != want || last.name != filepath.Join(tg.cfg.Postgres.BinDir, "pg_ctl") {
+	if got != want || last.name != filepath.Join(pathutil.Resolve(tg.cfg.Postgres.BinDir), "pg_ctl") {
 		t.Fatalf("ran %s %s\nwant      %s", last.name, got, want)
 	}
 	if !f.detached {
@@ -326,5 +327,68 @@ func TestIsPortInUse(t *testing.T) {
 	_ = ln.Close()
 	if isPortInUse(port) {
 		t.Fatal("isPortInUse(closed port) = true")
+	}
+}
+
+// aliasLayout makes root/alias -> other/sub, so root/alias/../<dir> reaches other/<dir> while a
+// lexical join would reach root/<dir>. Both copies of <dir> exist.
+func aliasLayout(t *testing.T, dir string) (written, real, decoy string) {
+	t.Helper()
+	root, other := t.TempDir(), t.TempDir()
+	for _, d := range []string{filepath.Join(root, dir), filepath.Join(other, dir), filepath.Join(other, "sub")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(other, "sub"), filepath.Join(root, "alias")); err != nil {
+		t.Fatal(err)
+	}
+	return root + "/alias/../" + dir, filepath.Join(other, dir), filepath.Join(root, dir)
+}
+
+// Re-review on PR #7: bin_dir with alias/.. must run the pg_ctl the filesystem reaches.
+func TestBinDirIsResolvedBeforeJoining(t *testing.T) {
+	f := install(t)
+	tg, _ := cluster(t, "17", 0)
+	written, real, decoy := aliasLayout(t, "bin")
+	tg.cfg.Postgres.BinDir = written
+
+	_, _ = tg.State()
+	_ = tg.Start()
+	_, _ = tg.Stop()
+	_ = tg.Checks()
+	for _, c := range f.calls {
+		if c.name != filepath.Join(pathutil.Resolve(real), "pg_ctl") {
+			t.Fatalf("ran %q, want the pg_ctl in %s (not %s)", c.name, real, decoy)
+		}
+	}
+	if len(f.calls) == 0 {
+		t.Fatal("no commands ran")
+	}
+}
+
+// The same applies to data_dir: PG_VERSION and postmaster.pid must come from the real folder.
+func TestDataDirIsResolvedBeforeJoining(t *testing.T) {
+	install(t)
+	tg, _ := cluster(t, "17", 0)
+	written, real, decoy := aliasLayout(t, "pgdata")
+	if err := os.WriteFile(filepath.Join(real, "PG_VERSION"), []byte("17\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(decoy, "PG_VERSION"), []byte("16\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(decoy, "postmaster.pid"), []byte("424242\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tg.cfg.Postgres.DataDir = written
+	tg.drive = "/"
+
+	items := tg.Checks()
+	if item := find(items, "PG_VERSION matches bin_dir"); !item.OK {
+		t.Fatalf("read the decoy PG_VERSION: %#v", item)
+	}
+	if item := find(items, "no stale postmaster.pid"); !item.OK {
+		t.Fatalf("read the decoy postmaster.pid: %#v", item)
 	}
 }

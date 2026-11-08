@@ -16,6 +16,7 @@ import (
 
 	"github.com/platform41/dockguard/internal/checks"
 	"github.com/platform41/dockguard/internal/config"
+	"github.com/platform41/dockguard/internal/pathutil"
 	"github.com/platform41/dockguard/internal/platform"
 	"github.com/platform41/dockguard/internal/target"
 )
@@ -50,13 +51,24 @@ func (t *Target) Kind() string { return config.KindPostgres }
 
 func (t *Target) MainPath() string { return t.cfg.Postgres.DataDir }
 
-func (t *Target) pgCtl() string { return filepath.Join(t.cfg.Postgres.BinDir, "pg_ctl") }
+// binPath and dataPath name a file inside bin_dir or data_dir. They resolve the folder first:
+// filepath.Join would collapse "alias/.." before the symlink is followed and could name a file in
+// a different folder from the one the filesystem reaches.
+func (t *Target) binPath(name string) string {
+	return filepath.Join(pathutil.Resolve(t.cfg.Postgres.BinDir), name)
+}
+
+func (t *Target) dataPath(name string) string {
+	return filepath.Join(pathutil.Resolve(t.cfg.Postgres.DataDir), name)
+}
+
+func (t *Target) pgCtl() string { return t.binPath("pg_ctl") }
 
 func (t *Target) Checks() []checks.Item {
 	pg := t.cfg.Postgres
 	items := []checks.Item{
 		checks.PathExists("pg_ctl in bin_dir", t.pgCtl()),
-		checks.PathExists("postgres in bin_dir", filepath.Join(pg.BinDir, "postgres")),
+		checks.PathExists("postgres in bin_dir", t.binPath("postgres")),
 		checks.PathExists("data_dir exists", pg.DataDir),
 		checks.UnderDrive("data_dir on the drive", pg.DataDir, t.drive),
 		checks.WritableDirectory("data_dir writable", pg.DataDir),
@@ -74,7 +86,7 @@ func (t *Target) Checks() []checks.Item {
 // versionCheck compares the cluster's PG_VERSION with the major version of bin_dir's pg_ctl.
 func (t *Target) versionCheck() checks.Item {
 	const name = "PG_VERSION matches bin_dir"
-	content, err := os.ReadFile(filepath.Join(t.cfg.Postgres.DataDir, "PG_VERSION"))
+	content, err := os.ReadFile(t.dataPath("PG_VERSION"))
 	if err != nil {
 		return checks.Item{Name: name, OK: false, Message: err.Error()}
 	}
@@ -122,7 +134,7 @@ func MajorVersion(output string) (string, bool) {
 // the cluster's own server is alive, so the port check can tell its own server from another.
 func (t *Target) pidCheck() (checks.Item, bool) {
 	const name = "no stale postmaster.pid"
-	pidFile := filepath.Join(t.cfg.Postgres.DataDir, "postmaster.pid")
+	pidFile := t.dataPath("postmaster.pid")
 	content, err := os.ReadFile(pidFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
