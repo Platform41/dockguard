@@ -54,8 +54,8 @@
 - [ ] `[v0.2.0] list command, status across targets, target argument on check/start/stop`
   **Owner:** Three
   **Priority:** P1
-  **Outcome:** AS-05, AS-06, AS-07, AS-09
-  **Source docs:** `docs/specs/multi-target.md` §2
+  **Outcome:** AS-05, AS-06, AS-07, AS-09, AS-21, AS-22
+  **Source docs:** `docs/specs/multi-target.md` §2, §3 (config lookup, D-015)
   **Dependencies:** Target layer
 
 - [ ] `[v0.2.0] Eject refuses while another target on the drive is running`
@@ -72,19 +72,19 @@
   **Source docs:** `docs/specs/multi-target.md` §4.2, §11
   **Dependencies:** v0.2.0; move the uncommitted Xcode work off the `master` checkout first
 
-- [ ] `[v0.3.0] brew-service kind (PostgreSQL 17)`
+- [ ] `[v0.3.0] postgres kind (pg_ctl clusters)`
   **Owner:** Three
   **Priority:** P2
-  **Outcome:** AS-15 to AS-17
+  **Outcome:** AS-15 to AS-17, AS-23
   **Source docs:** `docs/specs/multi-target.md` §4.3
-  **Dependencies:** v0.2.0; open question O2
+  **Dependencies:** v0.2.0; proposal P-3 approved
 
 - [ ] `[v0.4.0] container kind (Fizzy) and stop --all --eject`
   **Owner:** Three
   **Priority:** P3
   **Outcome:** AS-18 to AS-20
   **Source docs:** `docs/specs/multi-target.md` §4.4
-  **Dependencies:** v0.3.0; open question O1
+  **Dependencies:** v0.3.0. Includes removing Fizzy's launchd agent (D-014, AS-24)
 
 ### This Week
 
@@ -99,7 +99,7 @@ _None._
   **Priority:** P1
   **Branch:** `docs/multi-target-spec`
   **Deliverable:** `docs/specs/multi-target.md`
-  **Waiting on:** Azrad's review, proposals P-1 and P-2, open questions O1 to O3
+  **Waiting on:** Azrad's review of the spec and proposal P-3 (`postgres` kind replaces `brew-service`)
 
 ### Blocked
 
@@ -245,6 +245,10 @@ _None._
 | D-009 | 2026-11-08 | Keep the name DockGuard for now | Azrad | "Jaga" was the leading rename candidate; revisit before any public promotion |
 | D-010 | 2026-11-08 | Build for macOS only; keep OS commands in `internal/platform` so other systems can be added later | Azrad | Cross-OS is designed for, not built. Planning session, 2026-11-08 |
 | D-011 | 2026-11-08 | Parse config with `gopkg.in/yaml.v3` | Azrad | First external dependency; the hand-written parser can't handle nested target sections. Planning session, 2026-11-08 |
+| D-012 | 2026-11-08 | Defaults, examples and docs use a generic drive path (`/Volumes/ExternalSSD`), never a personal drive name or project | Azrad | Was proposal P-1. The repo is public |
+| D-013 | 2026-11-08 | DockGuard rejects `~/Library/Developer/CoreSimulator/Devices` as an external path | Azrad | Was proposal P-2. Moving it to an external drive breaks `simctl create` with no fix |
+| D-014 | 2026-11-08 | Remove Fizzy's start-at-login launchd agent; Fizzy starts through `dockguard start fizzy` | Azrad | Fizzy no longer starts while the drive is missing. Done with v0.4.0 |
+| D-015 | 2026-11-08 | The config file is the record of which apps DockGuard manages; also look it up at `~/.config/dockguard/dockguard.yaml`, and `list`/`status` print the file used | Azrad | Lands in v0.2.0 |
 
 ---
 

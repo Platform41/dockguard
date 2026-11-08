@@ -4,13 +4,12 @@
 **Last Updated:** 2026-11-08
 **Owner:** One
 **Builder:** Three
-**Decisions:** D-005 to D-011 in the [board's decision log](../board/KANBAN.md#decision-log).
-Proposals P-1 and P-2 (§10) need approval before they're built.
+**Decisions:** D-005 to D-015 in the [board's decision log](../board/KANBAN.md#decision-log).
+Proposal P-3 (§10) needs approval before v0.3.0 is built.
 
 DockGuard runs preflight checks before starting Docker Desktop when Docker's storage is on an
 external SSD. This spec extends the same protection to any application whose data lives on that
-drive: GUI apps such as Xcode, Homebrew services such as PostgreSQL, and Apple `container` stacks
-such as Fizzy.
+drive: GUI apps such as Xcode, PostgreSQL clusters, and Apple `container` stacks such as Fizzy.
 
 The product promise doesn't change: **check first, fail loudly, start only when it's safe.**
 
@@ -20,9 +19,9 @@ The product promise doesn't change: **check first, fail loudly, start only when 
 
 | Term | Meaning |
 | --- | --- |
-| **Drive** | The external volume the targets depend on, for example `/Volumes/T7SSD` |
-| **Target** | One managed application, named in the config (`docker`, `xcode`, `postgres`, `fizzy`) |
-| **Kind** | How DockGuard checks, starts and stops a target: `docker-desktop`, `app`, `brew-service`, `container` |
+| **Drive** | The external volume the targets depend on, for example `/Volumes/ExternalSSD` |
+| **Target** | One managed application, named in the config (`docker`, `xcode`, `myapp-db`, `fizzy`) |
+| **Kind** | How DockGuard checks, starts and stops a target: `docker-desktop`, `app`, `postgres`, `container` |
 | **Check** | One preflight test with a name, a pass/fail result and a message |
 
 New applications are **config entries of an existing kind**. Code is only needed for a new kind
@@ -60,13 +59,14 @@ Plain text, one line per check, the same `[OK]` / `[FAIL]` style as v0.1. Exampl
 
 ```text
 $ dockguard list
-Drive: /Volumes/T7SSD (mounted)
+Config: ~/.config/dockguard/dockguard.yaml
+Drive:  /Volumes/ExternalSSD (mounted)
 
-NAME      KIND            STATE     PATH
-docker    docker-desktop  running   /Volumes/T7SSD/docker-data/DockerDesktop
-xcode     app             stopped   ~/Library/Developer/Xcode/DerivedData -> /Volumes/T7SSD/...
-postgres  brew-service    stopped   /Volumes/T7SSD/postgres/17
-fizzy     container       running   /Volumes/T7SSD/container-data
+NAME        KIND            STATE     PATH
+docker      docker-desktop  running   /Volumes/ExternalSSD/docker-data/DockerDesktop
+xcode       app             stopped   ~/Library/Developer/Xcode/DerivedData -> /Volumes/ExternalSSD/...
+myapp-db  postgres        running   /Volumes/ExternalSSD/pgdata/myapp
+fizzy       container       running   /Volumes/ExternalSSD/container-data
 ```
 
 If the drive isn't mounted, `list` still lists the targets and shows `drive not mounted` as their
@@ -77,17 +77,26 @@ guess.
 
 ## 3. Config
 
-Parsed with `gopkg.in/yaml.v3` (D-011), which replaces the hand-written parser. Lookup is
-unchanged: `--config <path>`, otherwise `./dockguard.yaml`.
+Parsed with `gopkg.in/yaml.v3` (D-011), which replaces the hand-written parser.
+
+**The config is the record of what DockGuard manages (D-015).** `list` and `status` print which
+file they read. Lookup order:
+
+1. `--config <path>`
+2. `./dockguard.yaml`, if present (v0.1 behaviour)
+3. `~/.config/dockguard/dockguard.yaml`, the recommended home for the record
+
+If none exists, commands other than `help` fail and name the paths they tried. (v0.1 silently
+used built-in defaults; with several targets, a missing record must be visible.)
 
 ```yaml
-drive: /Volumes/T7SSD
+drive: /Volumes/ExternalSSD
 minimum_free_space_gb: 50          # default for every target; a target can override it
 
 targets:
   docker:
     kind: docker-desktop
-    storage_path: /Volumes/T7SSD/docker-data/DockerDesktop
+    storage_path: /Volumes/ExternalSSD/docker-data/DockerDesktop
     settings_path: ~/Library/Application Support/Docker/settings-store.json   # optional, auto-detected
     require_cli_start_support: true
     fail_if_already_running: true
@@ -99,19 +108,20 @@ targets:
       - ~/Library/Developer/Xcode/DerivedData
       - ~/Library/Developer/Xcode/Archives
 
-  postgres:                         # v0.3.0
-    kind: brew-service
-    service: postgresql@17
-    data_dir: /Volumes/T7SSD/postgres/17
-    version_file: PG_VERSION        # optional
-    expected_version: "17"          # optional; checked against version_file
+  myapp-db:                       # v0.3.0 (P-3)
+    kind: postgres
+    data_dir: /Volumes/ExternalSSD/pgdata/myapp
+    bin_dir: /opt/homebrew/opt/postgresql@17/bin   # optional; default: pg_ctl on the PATH
+    port: 55432                     # optional
+    socket_dir: /tmp                # optional
+    log_file: /Volumes/ExternalSSD/pgdata/myapp.log   # optional
 
   fizzy:                            # v0.4.0
     kind: container
     up: ~/.config/fizzy/fizzy-up.sh
     down: ~/.config/fizzy/fizzy-down.sh
     containers: [fizzy-db, fizzy-app]
-    data_path: /Volumes/T7SSD/container-data
+    data_path: /Volumes/ExternalSSD/container-data
 ```
 
 **Rules**
@@ -129,8 +139,8 @@ targets:
 a single `docker` target. `status` prints one line suggesting the new format. A file that mixes
 both formats is an error.
 
-**Defaults (proposal P-1):** no personal paths in defaults or docs. Examples use
-`/Volumes/ExternalSSD`. Your own config keeps `T7SSD`.
+**Defaults (D-012):** no personal paths in defaults, examples or docs. They use
+`/Volumes/ExternalSSD`. Personal configs keep their real paths.
 
 ---
 
@@ -160,23 +170,27 @@ Every kind uses the shared checks in §5 and adds its own.
 | Stop | Asks the app to quit (`osascript -e 'quit app "<app>"'`), which lets it save. No force-quit. |
 | Running | `pgrep -x <process>` |
 
-**CoreSimulator (proposal P-2):** `~/Library/Developer/CoreSimulator/Devices` is never accepted in
+**CoreSimulator (D-013):** `~/Library/Developer/CoreSimulator/Devices` is never accepted in
 `symlink_paths`; the config is rejected with the reason. Moving it to an external drive breaks
 `simctl create` with no workaround.
 
-### 4.3 `brew-service` (v0.3.0)
+### 4.3 `postgres` (v0.3.0, proposal P-3)
+
+For a PostgreSQL cluster run directly with `pg_ctl`, which is how the Homebrew PostgreSQL 17 in the
+current setup is used (not through `brew services`). Each cluster is its own target, so
+several projects can each have one.
 
 | | |
 | --- | --- |
-| Required keys | `service`, `data_dir` |
-| Optional keys | `version_file`, `expected_version`, `fail_if_already_running` (default true) |
-| Checks | `brew` is on the PATH and the service is installed; `data_dir` exists on the drive and is writable; free space; if `version_file` is set, the file exists and its contents equal `expected_version` |
-| Start | `brew services start <service>` |
-| Stop | `brew services stop <service>` |
-| Running | `brew services info <service> --json` |
+| Required keys | `data_dir` |
+| Optional keys | `bin_dir`, `port`, `socket_dir`, `log_file`, `fail_if_already_running` (default true) |
+| Checks | `pg_ctl` and `postgres` found (in `bin_dir` or on the PATH); `data_dir` exists on the drive and is writable; free space; `data_dir/PG_VERSION` matches the major version of `postgres --version`; no stale `postmaster.pid` (a PID file whose process isn't running fails with how to clear it); the port isn't used by another process |
+| Start | `pg_ctl -D <data_dir> -l <log_file> -o "-p <port> -k <socket_dir>" -w start` |
+| Stop | `pg_ctl -D <data_dir> -m fast -w stop` (no immediate mode, so no recovery needed on next start) |
+| Running | `pg_ctl -D <data_dir> status` |
 
-The data folder is set in the service's own config (for Postgres, `-D` or `postgresql.conf`).
-DockGuard checks it but never changes it.
+DockGuard only passes the options in the config. It never edits `postgresql.conf`. A MySQL kind
+can follow the same pattern if one is ever needed; Fizzy's MySQL is a container (§4.4).
 
 ### 4.4 `container` (v0.4.0)
 
@@ -188,6 +202,10 @@ DockGuard checks it but never changes it.
 | Start | Runs `up` |
 | Stop | Runs `down` |
 | Running | Every name in `containers` is running (`container list`) |
+
+**Fizzy at login (D-014):** the launchd agent that runs `fizzy-up.sh` at
+login is removed. Fizzy starts with `dockguard start fizzy` instead, so it never
+starts while the drive is missing. The v0.4.0 release notes include the removal steps.
 
 ---
 
@@ -219,12 +237,12 @@ internal/
 ├── config/         # yaml.v3 loading, validation, legacy mapping
 ├── checks/         # shared checks C1–C8
 ├── output/         # text output
-├── platform/       # macOS commands: diskutil, open, pgrep, osascript
+├── platform/       # macOS commands: diskutil, open, pgrep, osascript, lsof
 └── target/
     ├── target.go   # Target interface and registry
     ├── dockerdesktop/
     ├── app/        # v0.3.0
-    ├── brewservice/  # v0.3.0
+    ├── postgres/   # v0.3.0
     └── container/  # v0.4.0
 ```
 
@@ -255,18 +273,21 @@ replace them (as `dockerdesktop` does today). Other operating systems would be a
    apart from the already-running rule (§2)
 3. `list`; `status` across all targets; target argument on `check`, `start` and `stop`
 4. Eject refuses while another target on the drive is running
-5. Generic defaults and docs (P-1, if approved)
+5. Generic defaults and docs (D-012)
+6. Config lookup with `~/.config/dockguard/dockguard.yaml`; `list` and `status` name the file
+   (D-015)
 
-### v0.3.0 — Apps and Homebrew services
+### v0.3.0 — Apps and PostgreSQL
 
 1. `app` kind; Xcode in the example config
-2. `brew-service` kind; PostgreSQL 17 in the example config
-3. The CoreSimulator rule (§4.2; P-2, if approved)
+2. `postgres` kind (P-3); a sample cluster in the example config
+3. The CoreSimulator rule (§4.2, D-013)
 
 ### v0.4.0 — Containers
 
 1. `container` kind; Fizzy in the example config
 2. `stop --all [--eject]`
+3. Fizzy's launchd agent removed (D-014); release notes give the steps
 
 Each release: tests written with the change, `go vet` and `go test ./...` clean, CHANGELOG and
 release notes, tag after One's review.
@@ -295,6 +316,10 @@ release notes, tag after One's review.
 - **AS-09** Given an unknown target name, then the command fails, lists the valid names and exits 1.
 - **AS-10** Given another target on the drive is running, when I run `dockguard stop docker
   --eject`, then Docker stops, the drive isn't ejected, and the running targets are named.
+- **AS-21** Given no `--config` and no `./dockguard.yaml`, when I run `dockguard list` from any
+  folder, then it reads `~/.config/dockguard/dockguard.yaml` and prints that path.
+- **AS-22** Given no config file anywhere, when I run `dockguard list`, then it fails and names the
+  paths it tried.
 
 **v0.3.0**
 
@@ -305,16 +330,20 @@ release notes, tag after One's review.
 - **AS-13** Given DerivedData is a plain folder on the internal disk, then `check xcode` fails with
   "not on the drive".
 - **AS-14** Given `symlink_paths` includes CoreSimulator/Devices, then loading fails with the reason.
-- **AS-15** Given `postgres` with a data folder on the drive, when I run `dockguard start
-  postgres`, then `brew services start postgresql@17` runs only after the checks pass.
-- **AS-16** Given `PG_VERSION` says 16 and `expected_version` is 17, then `check postgres` fails and
-  shows both values.
-- **AS-17** Given Postgres is already stopped, when I run `dockguard stop postgres`, then it says so
-  and exits 0.
+- **AS-15** Given `myapp-db` with its data folder on the drive, when I run `dockguard start
+  myapp-db`, then `pg_ctl ... start` runs only after the checks pass, with the configured port,
+  socket folder and log file.
+- **AS-16** Given `PG_VERSION` says 16 and `postgres --version` says 17, then `check myapp-db`
+  fails and shows both values.
+- **AS-17** Given the cluster is already stopped, when I run `dockguard stop myapp-db`, then it
+  says so and exits 0.
+- **AS-23** Given a `postmaster.pid` whose process isn't running, then `check myapp-db` fails and
+  says how to clear it.
 
 **v0.4.0**
 
 - **AS-18** Given the Fizzy containers are running, then `list` shows `fizzy` as running.
+- **AS-24** Given I log in with the drive unplugged, then nothing tries to start Fizzy.
 - **AS-19** Given Docker, Postgres and Fizzy are running, when I run `dockguard stop --all
   --eject`, then they stop in reverse config order and the drive is ejected.
 - **AS-20** Given one target fails to stop, then `stop --all --eject` doesn't eject and names the
@@ -336,10 +365,11 @@ release notes, tag after One's review.
 
 ## 10. Proposals needing approval
 
+P-1 and P-2 were approved on 2026-11-08 and are now D-012 and D-013.
+
 | # | Proposal | Why |
 | --- | --- | --- |
-| P-1 | Defaults, examples and docs use a generic path (`/Volumes/ExternalSSD`), never a personal drive name | The repo is public; the June changes switched every default and the setup runbook to `T7SSD` |
-| P-2 | DockGuard rejects `~/Library/Developer/CoreSimulator/Devices` as an external path | Moving it to an external drive breaks `simctl create`, with no fix; the June example config lists it |
+| P-3 | Replace the `brew-service` kind in D-007 with a `postgres` kind that uses `pg_ctl` (§4.3) | PostgreSQL 17 in the current setup is the Homebrew build but runs directly with `pg_ctl -D <drive>/.../pgdata/<cluster>` on a custom port. `brew services` reports it as stopped, so a `brew-service` kind could never see or control it. Homebrew-managed services can come back as a kind if one is ever used. |
 
 ---
 
@@ -354,7 +384,7 @@ kind:
 - The top-level `xcode:` config section and the `dockguard xcode` command are dropped in favour of
   `targets.xcode` and `dockguard start xcode`.
 - The hand-written list parsing goes away with `yaml.v3`.
-- CoreSimulator/Devices is removed from the example, and the `T7SSD` defaults are reverted (P-1, P-2).
+- CoreSimulator/Devices is removed from the example, and the personal drive defaults are reverted (D-012, D-013).
 - The test Dockerfile and compose file are dropped: tests run with plain `go test ./...`.
 
 Three moves this work onto a `feat/` branch in its own worktree before v0.3.0; nothing is
@@ -364,8 +394,10 @@ committed from the `master` checkout.
 
 ## 12. Open questions
 
-| # | Question | For | Blocks |
-| --- | --- | --- | --- |
-| O1 | Fizzy starts at login through its launchd agent (`net.41labs.fizzy-container`). If the drive isn't mounted then, start-up fails. Should DockGuard replace that agent, or should the agent call `dockguard start fizzy`? | Azrad | v0.4.0 only |
-| O2 | Where does PostgreSQL 17's data folder live today? Brew's default is on the internal disk. Moving it is a manual step outside DockGuard. | Azrad | v0.3.0 example config |
-| O3 | Should the config also be looked up at `~/.config/dockguard/dockguard.yaml`, which the README already recommends, so `dockguard list` works from any folder? | Azrad | Nothing; small addition to v0.2.0 if yes |
+None open. Answered on 2026-11-08:
+
+| # | Question | Answer |
+| --- | --- | --- |
+| O1 | Fizzy's launchd agent | Remove it; DockGuard starts Fizzy (D-014) |
+| O2 | Where PostgreSQL's data lives | One cluster folder per project under `<drive>/Projects/pgdata/`, run with `pg_ctl`, which led to P-3 |
+| O3 | User-level config | Yes: `~/.config/dockguard/dockguard.yaml` is the record of managed apps (D-015) |

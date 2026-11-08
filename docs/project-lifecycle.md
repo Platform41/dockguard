@@ -23,8 +23,7 @@ The product goal for v1 is narrow and operational:
 DockGuard is not a Docker replacement, migration tool, or runtime recovery system.
 
 **From v0.2.0 (D-005):** the same protection extends to other applications whose data lives on
-the external drive: GUI apps (Xcode), Homebrew services (PostgreSQL) and Apple `container` stacks
-(Fizzy). See [`specs/multi-target.md`](specs/multi-target.md).
+the external drive: GUI apps (Xcode), PostgreSQL clusters and Apple `container` stacks (Fizzy). See [`specs/multi-target.md`](specs/multi-target.md).
 
 ---
 
@@ -73,9 +72,10 @@ Working product promise:
 
 ### In Scope from v0.2.0 (D-005 to D-011)
 
-- managed targets of four kinds: `docker-desktop`, `app`, `brew-service`, `container`
+- managed targets of four kinds: `docker-desktop`, `app`, `postgres` (proposal P-3), `container`
 - commands in the form `dockguard <action> [target]`, plus `dockguard list`
-- `yaml.v3` config with a `targets:` section; v0.1 config still read
+- `yaml.v3` config with a `targets:` section; v0.1 config still read; the config at
+  `~/.config/dockguard/dockguard.yaml` is the record of managed apps (D-015)
 - still macOS-only and CLI-only; OS commands kept in `internal/platform` for later systems
 
 ### Out of Scope for v1
@@ -339,8 +339,7 @@ Release checklist:
 
 `v0.1.0` to `v0.1.2` shipped on 2026-04-27. Next is multi-target support:
 
-1. Review and approve [`specs/multi-target.md`](specs/multi-target.md), including proposals
-   P-1 and P-2
+1. Review and approve [`specs/multi-target.md`](specs/multi-target.md), including proposal P-3
 2. `v0.2.0`: target layer, `list`, Docker Desktop moved onto it with v0.1 behaviour kept
-3. `v0.3.0`: `app` (Xcode) and `brew-service` (PostgreSQL) kinds
+3. `v0.3.0`: `app` (Xcode) and `postgres` kinds
 4. `v0.4.0`: `container` kind (Fizzy) and `stop --all --eject`
