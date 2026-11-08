@@ -14,7 +14,7 @@ All notable changes to DockGuard are documented in this file.
 
 ### Changed
 - Config is parsed with `gopkg.in/yaml.v3`; unknown keys and kinds are errors.
-- `status` covers every target and no longer reports "not ready" just because Docker Desktop is running.
+- `status` covers every target and no longer reports "not ready" just because Docker Desktop is running. A target whose state can't be read is not ready.
 - A missing config file is now an error instead of a silent fallback to built-in defaults.
 - When the drive isn't mounted, the checks that depend on it are shown as skipped.
 - The example config and README use the current format and a generic drive path.

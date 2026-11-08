@@ -137,3 +137,55 @@ func TestDriveMounted(t *testing.T) {
 		t.Fatal("DriveMounted(\"\") = true")
 	}
 }
+
+// Review on PR #4: "drive/link/../storage" where link points off the drive must fail. The
+// filesystem follows the link before "..", so the real path is outside the drive.
+func TestUnderDriveResolvesSymlinksBeforeParentTraversal(t *testing.T) {
+	drive := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Mkdir(filepath.Join(outside, "target"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(outside, "storage"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "target"), filepath.Join(drive, "link")); err != nil {
+		t.Fatal(err)
+	}
+
+	path := drive + "/link/../storage"
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("fixture: %s should reach %s/storage: %v", path, outside, err)
+	}
+	if item := UnderDrive("storage on the drive", path, drive); item.OK {
+		t.Fatalf("UnderDrive(%q) OK = true, want false: %s", path, item.Message)
+	}
+}
+
+func TestUnderDriveHandlesSymlinkLoops(t *testing.T) {
+	drive := t.TempDir()
+	a, b := filepath.Join(drive, "a"), filepath.Join(drive, "b")
+	if err := os.Symlink(b, a); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(a, b); err != nil {
+		t.Fatal(err)
+	}
+
+	// Must return rather than hang; the result doesn't matter beyond that.
+	_ = UnderDrive("loop", filepath.Join(a, "x"), drive)
+}
+
+func TestUnderDriveFollowsRelativeSymlinks(t *testing.T) {
+	drive := t.TempDir()
+	if err := os.Mkdir(filepath.Join(drive, "real"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("real", filepath.Join(drive, "rel")); err != nil {
+		t.Fatal(err)
+	}
+
+	if item := UnderDrive("relative link", filepath.Join(drive, "rel", "x"), drive); !item.OK {
+		t.Fatalf("item = %#v, want OK", item)
+	}
+}

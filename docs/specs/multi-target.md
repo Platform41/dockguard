@@ -35,7 +35,7 @@ Format: `dockguard <action> [target] [flags]` (D-006). Every command accepts `--
 | Command | Does | Exit code |
 | --- | --- | --- |
 | `dockguard list` | Lists the configured targets: name, kind, state (§2.2) and its main path on the drive. Runs no checks, so it's fast. | 0, or 1 if the config is invalid |
-| `dockguard status` | `list` plus the full checks for every target. Shows the drive once at the top. | 0 if every target is ready, else 1 |
+| `dockguard status` | `list` plus the full checks for every target. Shows the drive once at the top. | 0 if every target is ready, else 1. A target in the `unknown` state isn't ready. |
 | `dockguard check <target>` | Runs that target's checks | 0 if all pass, else 1 |
 | `dockguard start <target>` | Runs the checks, then starts the target only if they pass | 0 if started, else 1 |
 | `dockguard stop <target>` | Stops the target. If it's already stopped, says so and exits 0 | 0, or 1 on error |

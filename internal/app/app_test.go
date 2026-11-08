@@ -364,3 +364,16 @@ func TestEjectRefusedWhenDriveNotMounted(t *testing.T) {
 		t.Fatalf("Run = %d, %v; ejected = %v", code, err, h.ejected)
 	}
 }
+
+// Review on PR #4: a target whose state can't be read isn't ready, even if its checks pass.
+func TestStatusFailsWhenAStateProbeFails(t *testing.T) {
+	h := setup(t, true, false, &fake{name: "docker", states: states(target.Unknown), stateErr: errors.New("docker desktop status failed"), checksOK: true})
+
+	code, _ := Run([]string{"status"})
+	if code != 1 || !strings.Contains(h.out.String(), "Status: not ready") {
+		t.Fatalf("code = %d, output:\n%s", code, h.out)
+	}
+	if !strings.Contains(h.out.String(), "unknown (docker desktop status failed)") {
+		t.Fatalf("output:\n%s", h.out)
+	}
+}

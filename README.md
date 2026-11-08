@@ -78,7 +78,7 @@ DockGuard is not an "images-only offload" tool. It protects a setup where Docker
 | Command | Does |
 | --- | --- |
 | `dockguard list` | Lists the configured targets with their state (running, partial, stopped or unknown) and path. Runs no checks. |
-| `dockguard status` | Every target's state and checks. Exits 0 when every target is ready. A running target counts as ready. |
+| `dockguard status` | Every target's state and checks. Exits 0 when every target is ready. A running target counts as ready; one whose state can't be read doesn't. |
 | `dockguard check [target]` | Runs one target's checks, including the already-running guard |
 | `dockguard start [target]` | Runs the checks, then starts the target only if they all pass |
 | `dockguard stop [target] [--eject]` | Stops the target; with `--eject`, ejects the drive under the eject rule below |

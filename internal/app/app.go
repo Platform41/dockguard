@@ -233,8 +233,10 @@ func runStatus(cfg config.Config, entries []entry) (int, error) {
 		if mounted {
 			s, err := e.t.State()
 			state = s.String()
-			if s == target.Unknown && err != nil {
-				state += " (" + err.Error() + ")"
+			if s == target.Unknown {
+				// Safety can't be established without a state, so the target isn't ready.
+				state += " (" + errMessage(err) + ")"
+				ready = false
 			}
 		}
 		output.PrintTargetHeading(e.t.Name(), e.t.Kind(), state)
