@@ -406,11 +406,16 @@ func rejectCoreSimulator(path string) error {
 	clean := filepath.Clean(path)
 
 	// Compare both the spellings and the real paths, so an alias such as a symlink to
-	// CoreSimulator can't slip past the rule.
-	realPath, realDevices := pathutil.Resolve(clean), pathutil.Resolve(devices)
+	// CoreSimulator can't slip past the rule. The real path is resolved from the path as written:
+	// cleaning first would drop "link/.." before the link is followed.
+	realPath, realDevices := pathutil.Resolve(path), pathutil.Resolve(devices)
 	if pathutil.Within(clean, devices) || pathutil.Within(devices, clean) ||
 		pathutil.Within(realPath, realDevices) || pathutil.Within(realDevices, realPath) {
-		return fmt.Errorf("symlink_paths can't include %s: moving simulator devices to an external drive breaks `simctl create`, with no workaround", clean)
+		shown := path
+		if realPath != path {
+			shown = fmt.Sprintf("%s (reaches %s)", path, realPath)
+		}
+		return fmt.Errorf("symlink_paths can't include %s: moving simulator devices to an external drive breaks `simctl create`, with no workaround", shown)
 	}
 	return nil
 }
@@ -539,7 +544,9 @@ func expandPath(path string) string {
 
 	if strings.HasPrefix(path, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, strings.TrimPrefix(path, "~/"))
+			// Concatenate rather than filepath.Join, which would collapse ".." before any symlink
+			// is followed and change which folder the path reaches.
+			return strings.TrimSuffix(home, string(filepath.Separator)) + string(filepath.Separator) + strings.TrimPrefix(path, "~/")
 		}
 	}
 

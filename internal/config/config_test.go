@@ -364,3 +364,34 @@ func TestAppRejectsCoreSimulatorThroughAlias(t *testing.T) {
 		}
 	}
 }
+
+// Re-review on PR #6: "~/child-alias/../Devices" with child-alias -> CoreSimulator/Child reaches
+// Devices, because the filesystem follows the link before "..". It must be rejected.
+func TestAppRejectsCoreSimulatorThroughAliasAndParentTraversal(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	coreSim := filepath.Join(home, "Library", "Developer", "CoreSimulator")
+	for _, dir := range []string{"Devices", "Child"} {
+		if err := os.MkdirAll(filepath.Join(coreSim, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(coreSim, "Child"), filepath.Join(home, "child-alias")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  xcode:\n    kind: app\n    app: Xcode\n    symlink_paths: [~/child-alias/../Devices]\n"))
+	if err == nil || !strings.Contains(err.Error(), "simctl create") {
+		t.Fatalf("error = %v, want the CoreSimulator reason", err)
+	}
+}
+
+// Expanding "~" must not collapse "..": the filesystem resolves symlinks before "..", so the
+// spelling is kept for the checks to resolve.
+func TestExpandPathKeepsParentTraversal(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if got, want := expandPath("~/a/../b"), home+"/a/../b"; got != want {
+		t.Fatalf("expandPath = %q, want %q", got, want)
+	}
+}
