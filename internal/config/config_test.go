@@ -438,3 +438,38 @@ targets:
 		t.Fatalf("postgres = %#v", pg)
 	}
 }
+
+// Review on PR #7: a relative bin_dir like "." made Go search the PATH for pg_ctl. Paths in the
+// current format must be absolute or start with ~/.
+func TestRelativePathsAreRejected(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for _, entry := range []string{
+		"db: {kind: postgres, data_dir: /Volumes/X/db, bin_dir: .}",
+		"db: {kind: postgres, data_dir: pgdata/db, bin_dir: /opt/pg/bin}",
+		"db: {kind: postgres, data_dir: /Volumes/X/db, bin_dir: /opt/pg/bin, log_file: db.log}",
+		"docker: {kind: docker-desktop, storage_path: docker-data}",
+		"xcode: {kind: app, app: Xcode, symlink_paths: [DerivedData]}",
+	} {
+		_, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  " + entry + "\n"))
+		if err == nil || !strings.Contains(err.Error(), "absolute path") {
+			t.Fatalf("%s: error = %v, want an absolute-path error", entry, err)
+		}
+	}
+	if _, err := Parse([]byte("drive: Volumes/X\ntargets:\n  docker: {kind: docker-desktop, storage_path: /d}\n")); err == nil {
+		t.Fatal("relative drive accepted")
+	}
+	if _, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  db: {kind: postgres, data_dir: ~/pg/db, bin_dir: /opt/pg/bin}\n")); err != nil {
+		t.Fatalf("~/ path rejected: %v", err)
+	}
+}
+
+func TestPostgresLogFileDefaultsNextToDataDir(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  db: {kind: postgres, data_dir: /Volumes/X/pgdata/db, bin_dir: /opt/pg/bin}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Targets[0].Postgres.LogFile; got != "/Volumes/X/pgdata/db.log" {
+		t.Fatalf("LogFile = %q", got)
+	}
+}

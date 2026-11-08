@@ -7,7 +7,10 @@ All notable changes to DockGuard are documented in this file.
 ### Added
 - `app` target kind for macOS GUI apps such as Xcode: `symlink_paths` must each resolve to the drive, `start` opens the app with `open -a`, and `stop` asks it to quit only once it's confirmed running.
 - `~/Library/Developer/CoreSimulator/Devices`, anything inside it, and any folder containing it are rejected in `symlink_paths`, including through symlinked folders.
-- `postgres` target kind for clusters run with `pg_ctl` from a required, version-specific `bin_dir`. Checks the data folder is on the drive, `PG_VERSION` matches `bin_dir` (including 9.x two-part versions), no stale `postmaster.pid`, and the port is free. `stop` uses fast mode.
+- `postgres` target kind for clusters run with `pg_ctl` from a required, version-specific `bin_dir`. Checks the data folder is on the drive, `PG_VERSION` matches `bin_dir` (including 9.x two-part versions), no stale `postmaster.pid`, and the port is free. The server log goes to `log_file`, defaulting to `<data_dir>.log`. `stop` uses fast mode.
+
+### Changed
+- Paths in the current config format must be absolute or start with `~/`.
 
 ### Fixed
 - Expanding `~` in config paths no longer collapses `..` before symlinks are followed.

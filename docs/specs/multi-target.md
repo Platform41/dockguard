@@ -138,7 +138,7 @@ targets:
     bin_dir: /opt/homebrew/opt/postgresql@17/bin   # required: the version-specific install
     port: 55432                     # optional
     socket_dir: /tmp                # optional
-    log_file: /Volumes/ExternalSSD/pgdata/myapp.log   # optional
+    log_file: /Volumes/ExternalSSD/pgdata/myapp.log   # optional; defaults to <data_dir>.log
 
   fizzy:                            # v0.4.0
     kind: container
@@ -152,7 +152,9 @@ targets:
 
 - Target names: lowercase letters, digits and `-`. The order in the file is the order of `list`,
   `status` and `stop --all` (reversed for stopping).
-- `~` is expanded in every path field.
+- `~` is expanded in every path field. Every path must be absolute or start with `~/`: a relative
+  path would depend on the folder DockGuard runs from, and a relative `bin_dir` would send command
+  lookup to the PATH. (v0.1 files are read as before.)
 - Unknown keys, unknown kinds and missing required keys are errors that name the target and key.
   DockGuard doesn't guess.
 - Every target is checked to be on the drive: its main path (`storage_path`, `data_dir`,
@@ -209,7 +211,7 @@ several projects can each have one.
 | Required keys | `data_dir`, `bin_dir` |
 | Optional keys | `port`, `socket_dir`, `log_file`, `fail_if_already_running` (default true) |
 | Checks | `pg_ctl` and `postgres` exist in `bin_dir`; `data_dir` exists on the drive and is writable; free space; `data_dir/PG_VERSION` matches the major version of `<bin_dir>/pg_ctl --version`; no stale `postmaster.pid` (a PID file whose process isn't running fails with how to clear it); the port isn't used by another process |
-| Start | `pg_ctl -D <data_dir> -l <log_file> -o "-p <port> -k <socket_dir>" -w start` |
+| Start | `pg_ctl -D <data_dir> -l <log_file> -o "-p <port> -k <socket_dir>" -w start`. `-l` is always passed (default `<data_dir>.log`): without it the server inherits pg_ctl's output and keeps it open, so the caller would wait on it. |
 | Stop | `pg_ctl -D <data_dir> -m fast -w stop` (no immediate mode, so no recovery needed on next start) |
 | Running | `pg_ctl -D <data_dir> status` |
 

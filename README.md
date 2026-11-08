@@ -128,10 +128,11 @@ targets:
     bin_dir: /opt/homebrew/opt/postgresql@17/bin   # required: the cluster's own version
     port: 55432                     # optional
     socket_dir: /tmp                # optional
-    log_file: /Volumes/ExternalSSD/pgdata/myapp.log  # optional
+    log_file: /Volumes/ExternalSSD/pgdata/myapp.log  # optional; defaults to <data_dir>.log
 ```
 
-Unknown keys and kinds are errors. Target names use lowercase letters, digits and `-`.
+Unknown keys and kinds are errors. Target names use lowercase letters, digits and `-`. Paths must
+be absolute or start with `~/`.
 
 **v0.1 configs still work.** A file with `external_mount_path`, `docker_storage_path` and
 `docker_desktop:` is read as a single `docker` target, and `status` suggests the new format.
@@ -182,7 +183,8 @@ any version, or several side by side, is just another entry with its own `bin_di
 - with `port`, nothing else is listening on it
 - with `fail_if_already_running` (default on), `check` and `start` fail if the cluster is running
 
-`start` runs `pg_ctl -D <data_dir> [-l log_file] [-o "-p port -k socket_dir"] -w start`. `stop` runs
+`start` runs `pg_ctl -D <data_dir> -l <log_file> [-o "-p port -k socket_dir"] -w start`. The server
+log goes to `log_file`, or `<data_dir>.log` when it isn't set. `stop` runs
 `pg_ctl -m fast -w stop`, only once the cluster is confirmed running. DockGuard never edits
 `postgresql.conf`.
 

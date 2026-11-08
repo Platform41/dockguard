@@ -52,13 +52,14 @@ type fakes struct {
 	cmdCode    int
 	alive      map[int]bool
 	portBusy   bool
+	detached   bool
 }
 
 func install(t *testing.T) *fakes {
 	t.Helper()
 	f := &fakes{version: "pg_ctl (PostgreSQL) 17.11 (Homebrew)\n", statusCode: statusNotRunning, alive: map[int]bool{}}
-	origRun, origAlive, origPort := run, processAlive, portInUse
-	t.Cleanup(func() { run, processAlive, portInUse = origRun, origAlive, origPort })
+	origRun, origDetached, origAlive, origPort := run, runDetached, processAlive, portInUse
+	t.Cleanup(func() { run, runDetached, processAlive, portInUse = origRun, origDetached, origAlive, origPort })
 
 	run = func(name string, args ...string) (string, int, error) {
 		f.calls = append(f.calls, call{name, args})
@@ -70,6 +71,12 @@ func install(t *testing.T) *fakes {
 		default:
 			return "", f.cmdCode, nil
 		}
+	}
+	// start must go through runDetached; record it the same way.
+	runDetached = func(name string, args ...string) (string, int, error) {
+		f.calls = append(f.calls, call{name, append([]string{}, args...)})
+		f.detached = true
+		return "", f.cmdCode, nil
 	}
 	processAlive = func(pid int) bool { return f.alive[pid] }
 	portInUse = func(int) bool { return f.portBusy }
@@ -243,6 +250,9 @@ func TestStartArguments(t *testing.T) {
 	want := fmt.Sprintf("-D %s -l %s -o -p 55432 -k '/tmp' -w start", dataDir, tg.cfg.Postgres.LogFile)
 	if got != want || last.name != filepath.Join(tg.cfg.Postgres.BinDir, "pg_ctl") {
 		t.Fatalf("ran %s %s\nwant      %s", last.name, got, want)
+	}
+	if !f.detached {
+		t.Fatal("start didn't use RunDetached")
 	}
 }
 

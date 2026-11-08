@@ -227,6 +227,9 @@ func parseCurrent(doc *yaml.Node) (Config, error) {
 	if cfg.Drive == "" {
 		return Config{}, errors.New("missing required key \"drive\"")
 	}
+	if err := requireAbsolute("drive", cfg.Drive); err != nil {
+		return Config{}, err
+	}
 	if file.MinimumFreeSpaceGB != nil {
 		if *file.MinimumFreeSpaceGB <= 0 {
 			return Config{}, errors.New("minimum_free_space_gb must be greater than zero")
@@ -361,6 +364,12 @@ func parseDockerDesktop(name string, node *yaml.Node, defaultFreeGB int) (Target
 		}
 		target.MinimumFreeSpaceGB = *keys.MinimumFreeSpaceGB
 	}
+	if err := requireAbsolute("storage_path", target.DockerDesktop.StoragePath); err != nil {
+		return Target{}, err
+	}
+	if err := requireAbsolute("settings_path", target.DockerDesktop.SettingsPath); err != nil {
+		return Target{}, err
+	}
 	if target.DockerDesktop.SettingsPath == "" {
 		settings, err := DetectSettingsPath()
 		if err != nil {
@@ -394,6 +403,9 @@ func parseApp(name string, node *yaml.Node) (Target, error) {
 		path := cleanPath(raw)
 		if path == "" {
 			return Target{}, errors.New("symlink_paths has an empty entry")
+		}
+		if err := requireAbsolute("symlink_paths", path); err != nil {
+			return Target{}, err
 		}
 		if err := rejectCoreSimulator(path); err != nil {
 			return Target{}, err
@@ -436,6 +448,17 @@ func parsePostgres(name string, node *yaml.Node, defaultFreeGB int) (Target, err
 	if pg.BinDir == "" {
 		return Target{}, errors.New("missing required key \"bin_dir\": the version-specific install, for example /opt/homebrew/opt/postgresql@17/bin")
 	}
+	for _, field := range []struct{ key, value string }{
+		{"data_dir", pg.DataDir}, {"bin_dir", pg.BinDir}, {"socket_dir", pg.SocketDir}, {"log_file", pg.LogFile},
+	} {
+		if err := requireAbsolute(field.key, field.value); err != nil {
+			return Target{}, err
+		}
+	}
+	if pg.LogFile == "" {
+		// pg_ctl always gets -l: without it the server inherits pg_ctl's output and keeps it open.
+		pg.LogFile = strings.TrimSuffix(pg.DataDir, string(filepath.Separator)) + ".log"
+	}
 	if keys.Port != nil {
 		if *keys.Port < 1 || *keys.Port > 65535 {
 			return Target{}, fmt.Errorf("port %d is out of range 1-65535", *keys.Port)
@@ -450,6 +473,16 @@ func parsePostgres(name string, node *yaml.Node, defaultFreeGB int) (Target, err
 		FailIfAlreadyRunning: boolOr(keys.FailIfAlreadyRunning, true),
 		Postgres:             pg,
 	}, nil
+}
+
+// requireAbsolute rejects relative paths: their meaning would depend on the folder DockGuard runs
+// from, and a relative bin_dir could even send command lookup to the PATH. Empty values pass;
+// required keys are checked separately.
+func requireAbsolute(key, value string) error {
+	if value == "" || filepath.IsAbs(value) {
+		return nil
+	}
+	return fmt.Errorf("%s must be an absolute path or start with ~/: %q", key, value)
 }
 
 // rejectCoreSimulator enforces D-013: simulator devices break on an external drive, so DockGuard

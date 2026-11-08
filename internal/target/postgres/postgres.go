@@ -23,6 +23,7 @@ import (
 // Swappable for tests.
 var (
 	run          = platform.Run
+	runDetached  = platform.RunDetached
 	processAlive = isProcessAlive
 	portInUse    = isPortInUse
 )
@@ -173,18 +174,17 @@ func (t *Target) State() (target.State, error) {
 }
 
 // Start runs pg_ctl start with only the options in the config; it never edits postgresql.conf.
+// -l is always passed (the config defaults it next to data_dir), and output is captured through a
+// file, so the server can't hold DockGuard's output open after pg_ctl exits.
 func (t *Target) Start() error {
 	pg := t.cfg.Postgres
-	args := []string{"-D", pg.DataDir}
-	if pg.LogFile != "" {
-		args = append(args, "-l", pg.LogFile)
-	}
+	args := []string{"-D", pg.DataDir, "-l", pg.LogFile}
 	if opts := serverOptions(pg); opts != "" {
 		args = append(args, "-o", opts)
 	}
 	args = append(args, "-w", "start")
 
-	output, code, err := run(t.pgCtl(), args...)
+	output, code, err := runDetached(t.pgCtl(), args...)
 	if err != nil || code != 0 {
 		return fmt.Errorf("start %s: %s", t.cfg.Name, describe(output, code, err))
 	}
