@@ -5,142 +5,41 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/platform41/dockguard/internal/config"
 )
 
-func TestRunPreflightSuccess(t *testing.T) {
-	originalIsRunning := isDockerDesktopRunning
-	t.Cleanup(func() {
-		isDockerDesktopRunning = originalIsRunning
-	})
-	isDockerDesktopRunning = func() (bool, error) {
-		return false, nil
-	}
-
-	mountPath := t.TempDir()
-	storagePath := filepath.Join(mountPath, "DockerDesktop")
-	settingsPath := filepath.Join(t.TempDir(), "settings-store.json")
-
-	if err := os.Mkdir(storagePath, 0o755); err != nil {
-		t.Fatalf("mkdir storage path: %v", err)
-	}
-
-	content := `{"diskImageLocation": "` + storagePath + `"}`
-	if err := os.WriteFile(settingsPath, []byte(content), 0o644); err != nil {
+func writeSettings(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "settings-store.json")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write settings: %v", err)
 	}
+	return path
+}
 
-	cfg := config.Config{
-		ExternalMountPath:  mountPath,
-		DockerStoragePath:  storagePath,
-		MinimumFreeSpaceGB: 1,
-		DockerDesktopConfig: config.DockerDesktopConfig{
-			SettingsPath:         settingsPath,
-			FailIfAlreadyRunning: true,
-		},
-	}
+func TestSettingsContainStoragePathMatches(t *testing.T) {
+	storage := t.TempDir()
+	settings := writeSettings(t, `{"diskImageLocation": "`+storage+`"}`)
 
-	result := RunPreflight(cfg)
-	if !result.OK {
-		t.Fatalf("RunPreflight() OK = false, items = %#v", result.Items)
+	if item := SettingsContainStoragePath(settings, storage); !item.OK {
+		t.Fatalf("item = %#v, want OK", item)
 	}
 }
 
-func TestRunPreflightFailsWhenSettingsDoNotMatch(t *testing.T) {
-	originalIsRunning := isDockerDesktopRunning
-	t.Cleanup(func() {
-		isDockerDesktopRunning = originalIsRunning
-	})
-	isDockerDesktopRunning = func() (bool, error) {
-		return false, nil
-	}
+func TestSettingsContainStoragePathAcceptsUppercaseKey(t *testing.T) {
+	storage := t.TempDir()
+	settings := writeSettings(t, `{"DataFolder": "`+storage+`"}`)
 
-	mountPath := t.TempDir()
-	storagePath := filepath.Join(mountPath, "DockerDesktop")
-	settingsPath := filepath.Join(t.TempDir(), "settings-store.json")
-
-	if err := os.Mkdir(storagePath, 0o755); err != nil {
-		t.Fatalf("mkdir storage path: %v", err)
-	}
-
-	content := `{"diskImageLocation": "/Volumes/OtherDrive/DockerDesktop"}`
-	if err := os.WriteFile(settingsPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("write settings: %v", err)
-	}
-
-	cfg := config.Config{
-		ExternalMountPath:  mountPath,
-		DockerStoragePath:  storagePath,
-		MinimumFreeSpaceGB: 1,
-		DockerDesktopConfig: config.DockerDesktopConfig{
-			SettingsPath: settingsPath,
-		},
-	}
-
-	result := RunPreflight(cfg)
-	if result.OK {
-		t.Fatal("RunPreflight() OK = true, want false")
-	}
-
-	foundMismatch := false
-	for _, item := range result.Items {
-		if item.Name == "docker desktop settings match storage path" && !item.OK && strings.Contains(item.Message, "expected path not found") {
-			foundMismatch = true
-		}
-	}
-
-	if !foundMismatch {
-		t.Fatalf("expected mismatch item, items = %#v", result.Items)
+	if item := SettingsContainStoragePath(settings, storage); !item.OK {
+		t.Fatalf("item = %#v, want OK", item)
 	}
 }
 
-func TestRunPreflightFailsWhenDockerDesktopIsAlreadyRunning(t *testing.T) {
-	originalIsRunning := isDockerDesktopRunning
-	t.Cleanup(func() {
-		isDockerDesktopRunning = originalIsRunning
-	})
-	isDockerDesktopRunning = func() (bool, error) {
-		return true, nil
-	}
+func TestSettingsContainStoragePathFailsOnMismatch(t *testing.T) {
+	settings := writeSettings(t, `{"diskImageLocation": "/Volumes/OtherDrive/DockerDesktop"}`)
 
-	mountPath := t.TempDir()
-	storagePath := filepath.Join(mountPath, "DockerDesktop")
-	settingsPath := filepath.Join(t.TempDir(), "settings-store.json")
-
-	if err := os.Mkdir(storagePath, 0o755); err != nil {
-		t.Fatalf("mkdir storage path: %v", err)
-	}
-
-	content := `{"diskImageLocation": "` + storagePath + `"}`
-	if err := os.WriteFile(settingsPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("write settings: %v", err)
-	}
-
-	cfg := config.Config{
-		ExternalMountPath:  mountPath,
-		DockerStoragePath:  storagePath,
-		MinimumFreeSpaceGB: 1,
-		DockerDesktopConfig: config.DockerDesktopConfig{
-			SettingsPath:         settingsPath,
-			FailIfAlreadyRunning: true,
-		},
-	}
-
-	result := RunPreflight(cfg)
-	if result.OK {
-		t.Fatal("RunPreflight() OK = true, want false")
-	}
-
-	foundRunningFailure := false
-	for _, item := range result.Items {
-		if item.Name == "docker desktop not already running" && !item.OK {
-			foundRunningFailure = true
-		}
-	}
-
-	if !foundRunningFailure {
-		t.Fatalf("expected already-running failure, items = %#v", result.Items)
+	item := SettingsContainStoragePath(settings, t.TempDir())
+	if item.OK || !strings.Contains(item.Message, "expected path not found") {
+		t.Fatalf("item = %#v, want mismatch failure", item)
 	}
 }
 
@@ -163,52 +62,78 @@ func TestExtractSettingsPathsCollectsNestedKeys(t *testing.T) {
 		seen[path] = true
 	}
 
-	expected := []string{
-		"/Volumes/External/DockerDesktop",
-		"/Volumes/External/Data",
-		"/Volumes/External/Storage",
-	}
-
-	for _, path := range expected {
+	for _, path := range []string{"/Volumes/External/DockerDesktop", "/Volumes/External/Data", "/Volumes/External/Storage"} {
 		if !seen[path] {
 			t.Fatalf("expected path %q in results, got %#v", path, paths)
 		}
 	}
 }
 
-func TestRunPreflightSuccessWithUppercaseSettingsKey(t *testing.T) {
-	originalIsRunning := isDockerDesktopRunning
-	t.Cleanup(func() {
-		isDockerDesktopRunning = originalIsRunning
-	})
-	isDockerDesktopRunning = func() (bool, error) {
-		return false, nil
+func TestUnderDrive(t *testing.T) {
+	drive := t.TempDir()
+	inside := filepath.Join(drive, "DockerDesktop")
+	if err := os.Mkdir(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sibling := drive + "-other"
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"inside", inside, true},
+		{"the drive itself", drive, true},
+		{"not yet created, inside", filepath.Join(drive, "later"), true},
+		{"outside", t.TempDir(), false},
+		{"shares a prefix only", sibling, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			item := UnderDrive("path on the drive", tt.path, drive)
+			if item.OK != tt.want {
+				t.Fatalf("UnderDrive(%q) OK = %v, want %v (%s)", tt.path, item.OK, tt.want, item.Message)
+			}
+		})
+	}
+}
+
+func TestUnderDriveFollowsSymlinks(t *testing.T) {
+	drive := t.TempDir()
+	target := filepath.Join(drive, "DerivedData")
+	if err := os.Mkdir(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "DerivedData")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
 	}
 
-	mountPath := t.TempDir()
-	storagePath := filepath.Join(mountPath, "DockerDesktop")
-	settingsPath := filepath.Join(t.TempDir(), "settings-store.json")
-
-	if err := os.Mkdir(storagePath, 0o755); err != nil {
-		t.Fatalf("mkdir storage path: %v", err)
+	if item := UnderDrive("link on the drive", link, drive); !item.OK {
+		t.Fatalf("item = %#v, want OK", item)
 	}
+}
 
-	content := `{"DataFolder": "` + storagePath + `"}`
-	if err := os.WriteFile(settingsPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("write settings: %v", err)
+func TestSkipAllMarksEveryItem(t *testing.T) {
+	items := SkipAll([]Item{{Name: "a", OK: true}, {Name: "b", OK: false}})
+	for _, item := range items {
+		if !item.Skipped || item.OK || item.Message != "skipped: drive not mounted" {
+			t.Fatalf("item = %#v, want skipped", item)
+		}
 	}
-
-	cfg := config.Config{
-		ExternalMountPath:  mountPath,
-		DockerStoragePath:  storagePath,
-		MinimumFreeSpaceGB: 1,
-		DockerDesktopConfig: config.DockerDesktopConfig{
-			SettingsPath: settingsPath,
-		},
+	if AllOK(items) {
+		t.Fatal("AllOK(skipped) = true, want false")
 	}
+}
 
-	result := RunPreflight(cfg)
-	if !result.OK {
-		t.Fatalf("RunPreflight() OK = false, items = %#v", result.Items)
+func TestDriveMounted(t *testing.T) {
+	if !DriveMounted(t.TempDir()) {
+		t.Fatal("DriveMounted(existing dir) = false")
+	}
+	if DriveMounted(filepath.Join(t.TempDir(), "missing")) {
+		t.Fatal("DriveMounted(missing) = true")
+	}
+	if DriveMounted("") {
+		t.Fatal("DriveMounted(\"\") = true")
 	}
 }

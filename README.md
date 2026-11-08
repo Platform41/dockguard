@@ -1,21 +1,22 @@
 # DockGuard
 
-DockGuard is a macOS-first Go CLI that performs preflight checks before starting Docker Desktop when Docker Desktop storage is hosted on an external SSD.
+DockGuard is a macOS Go CLI that runs preflight checks before starting applications whose data lives
+on an external SSD, and stops them safely before the drive is ejected.
+
+Today it manages Docker Desktop. Xcode, PostgreSQL clusters and Apple `container` stacks follow in
+v0.3.0 and v0.4.0 (see [`docs/specs/multi-target.md`](docs/specs/multi-target.md)).
 
 ## Quickstart
 
-1. Create a config file (`./dockguard.yaml`) based on the example below.
-2. Run `dockguard status` to verify readiness.
-3. Start Docker Desktop safely with `dockguard start`.
-
-```bash
-dockguard status
-dockguard start
-```
+1. Create `~/.config/dockguard/dockguard.yaml` from [`examples/dockguard.yaml`](examples/dockguard.yaml).
+2. See what DockGuard manages: `dockguard list`.
+3. Check everything is ready: `dockguard status`.
+4. Start safely: `dockguard start docker`.
+5. Stop and eject: `dockguard stop docker --eject`.
 
 ## Install
 
-From source (Go 1.21+):
+From source (Go 1.23+):
 
 ```bash
 go install ./cmd/dockguard
@@ -39,18 +40,16 @@ which dockguard
 dockguard --help
 ```
 
-Recommended user-level config location:
+Recommended config location (found automatically, so `--config` isn't needed):
 
 ```text
 ~/.config/dockguard/dockguard.yaml
 ```
 
-Optional shell function (recommended over alias):
+Optional shorter name:
 
 ```bash
-dg() {
-  dockguard "$1" --config "$HOME/.config/dockguard/dockguard.yaml" "${@:2}"
-}
+dg() { dockguard "$@"; }
 ```
 
 Add this to `~/.zshrc`, then reload with `source ~/.zshrc`.
@@ -63,8 +62,8 @@ go build -o ./bin/dockguard ./cmd/dockguard
 
 ## Prerequisites
 
-- macOS with Docker Desktop installed
-- External SSD configured as the Docker Desktop storage location
+- macOS with Docker Desktop 4.37 or later (for `docker desktop start`)
+- An external SSD set as Docker Desktop's storage location
 
 ## Correct Mental Model
 
@@ -74,82 +73,64 @@ go build -o ./bin/dockguard ./cmd/dockguard
 
 DockGuard is not an "images-only offload" tool. It protects a setup where Docker Desktop storage is externalized to an SSD, while compute still runs on the MacBook.
 
-## v1 Scope
-
-In scope:
-
-- macOS-only CLI
-- preflight validation before Docker Desktop startup
-- external mount presence checks
-- Docker Desktop storage path checks
-- writability checks
-- free-space threshold checks
-- Docker Desktop settings validation against the expected path
-- guarded startup through `docker desktop start`
-
-Out of scope:
-
-- replacing Docker Desktop
-- automatic Docker data migration
-- runtime protection after Docker Desktop has already started
-- Windows or Linux support
-- GUI or menu bar app
-
 ## Commands
 
-- `dockguard status [--config path]`: report readiness and key environment state
-- `dockguard check [--config path]`: run all required preflight validations
-- `dockguard start [--config path]`: run checks, then start Docker Desktop only if safe
-- `dockguard stop [--config path] [--eject]`: stop Docker Desktop and optionally eject the configured external mount
+| Command | Does |
+| --- | --- |
+| `dockguard list` | Lists the configured targets with their state (running, partial, stopped or unknown) and path. Runs no checks. |
+| `dockguard status` | Every target's state and checks. Exits 0 when every target is ready. A running target counts as ready. |
+| `dockguard check [target]` | Runs one target's checks, including the already-running guard |
+| `dockguard start [target]` | Runs the checks, then starts the target only if they all pass |
+| `dockguard stop [target] [--eject]` | Stops the target; with `--eject`, ejects the drive under the eject rule below |
 
-If `--config` is omitted, DockGuard looks for `./dockguard.yaml` and falls back to built-in defaults when that file is absent.
+With no target, `check`, `start` and `stop` act on the target named `docker`, so v0.1 commands keep
+working. Every command accepts `--config <path>`.
 
-## Compatibility Notes
-
-- DockGuard targets macOS and Docker Desktop.
-- `docker desktop start` is the preferred startup path and depends on Docker Desktop CLI support.
-- Docker Desktop settings file location is not assumed to be fixed. DockGuard is designed for overrideable and version-aware settings file detection.
+**Eject rule.** After stopping, DockGuard checks every configured target again, waiting up to 30
+seconds for the one it just stopped. It ejects only when every target is confirmed stopped. A
+target that is running, partly running, or whose state can't be read blocks the eject, and DockGuard
+names it. There's no override flag.
 
 ## Configuration
 
-See `examples/dockguard.yaml` for the intended config shape.
+The config file is the record of which applications DockGuard manages. DockGuard looks for it in
+this order:
 
-For a full end-to-end user setup (external SSD format, rollback backup, native binary install, user-level config path, and safe stop/eject flow), see `docs/docker-local-setup.md`.
+1. `--config <path>`
+2. `./dockguard.yaml`
+3. `~/.config/dockguard/dockguard.yaml`
 
-Expected config inputs:
-
-- external mount path
-- Docker Desktop storage path
-- minimum free space threshold
-- optional explicit settings file path override
-- optional already-running guard
-
-Example:
-
-```bash
-dockguard check --config ./dockguard.yaml
-```
-
-Minimal config example:
+If none exists, DockGuard stops and names the paths it tried. `list` and `status` print the file
+they read.
 
 ```yaml
-external_mount_path: /Volumes/DockerSSD
-docker_storage_path: /Volumes/DockerSSD/DockerDesktop
+drive: /Volumes/ExternalSSD
 minimum_free_space_gb: 50
-fail_if_already_running: true
+
+targets:
+  docker:
+    kind: docker-desktop
+    storage_path: /Volumes/ExternalSSD/docker-data/DockerDesktop
+    # settings_path: ~/Library/Application Support/Docker/settings-store.json  # auto-detected
+    require_cli_start_support: true
+    fail_if_already_running: true
 ```
 
-## Current Checks
+Unknown keys and kinds are errors. Target names use lowercase letters, digits and `-`.
 
-`status` and `check` currently validate:
+**v0.1 configs still work.** A file with `external_mount_path`, `docker_storage_path` and
+`docker_desktop:` is read as a single `docker` target, and `status` suggests the new format.
 
-- external mount path is configured and exists
-- Docker storage path is configured and exists
-- Docker storage path is writable
-- available free space meets the configured threshold
-- Docker Desktop settings file exists
-- Docker Desktop settings JSON contains the expected storage path
-- Docker Desktop is not already running when `fail_if_already_running` is enabled
+For a full setup (external SSD format, rollback backup, install, and safe stop/eject), see
+[`docs/docker-local-setup.md`](docs/docker-local-setup.md).
+
+## Docker Desktop checks
+
+- the drive is configured and mounted (if not, the other checks are skipped)
+- the storage path exists, is on the drive, and is writable
+- free space meets `minimum_free_space_gb`
+- the settings file exists and points at the storage path
+- with `fail_if_already_running`, `check` and `start` fail if Docker Desktop is already running
 
 Recognized settings keys for storage-path validation:
 
@@ -163,32 +144,23 @@ This settings validation is JSON-aware, but it is still based on recognized keys
 
 ## Common Failures
 
-- External mount not found: ensure the SSD is mounted at `external_mount_path`.
-- Storage path missing: confirm Docker Desktop is configured to use the external path.
+- Drive not mounted: plug in the SSD; the drive's other checks show `[skip]` until it's mounted.
+- Storage path missing or not on the drive: confirm Docker Desktop's disk image location.
 - Free space below threshold: lower `minimum_free_space_gb` or free space on the SSD.
 - Docker already running: stop Docker Desktop or set `fail_if_already_running: false`.
+- Drive not ejected: `dockguard list` shows which target is still running or in an unknown state.
 
 ## Project Layout
 
 ```text
 dockguard/
 ├── cmd/dockguard/
-├── internal/checks/
-├── internal/config/
-├── internal/dockerdesktop/
+├── internal/app/          # commands and the eject rule
+├── internal/checks/       # shared preflight checks
+├── internal/config/       # config loading and validation
+├── internal/dockerdesktop/  # Docker Desktop CLI
 ├── internal/output/
-├── internal/platform/
+├── internal/platform/     # macOS commands (diskutil)
+├── internal/target/       # target interface and kinds
 └── examples/
 ```
-
-## Current Status
-
-The repo currently contains:
-
-- project lifecycle and Kanban docs aligned to the reviewed proposal
-- a working config loader with `--config` support
-- implemented preflight checks for filesystem state and Docker Desktop settings
-- guarded startup through `docker desktop start`
-- an example config file for the first implementation slice
-
-The next implementation milestone is tightening Docker Desktop compatibility handling and expanding test coverage around real-world settings variants.

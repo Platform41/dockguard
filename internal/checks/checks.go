@@ -1,3 +1,5 @@
+// Package checks holds the preflight checks shared by every target kind
+// (docs/specs/multi-target.md §5).
 package checks
 
 import (
@@ -7,76 +9,54 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-
-	"github.com/platform41/dockguard/internal/config"
-	"github.com/platform41/dockguard/internal/dockerdesktop"
 )
 
+// Item is the result of one check.
 type Item struct {
 	Name    string
 	OK      bool
+	Skipped bool
 	Message string
 }
 
-type Result struct {
-	OK    bool
-	Items []Item
-}
-
-type Status struct {
-	Ready   bool
-	Summary string
-	Items   []Item
-}
-
-var isDockerDesktopRunning = dockerdesktop.IsRunning
-
-func BuildStatus(cfg config.Config) Status {
-	result := RunPreflight(cfg)
-
-	summary := "ready"
-	if !result.OK {
-		summary = "not ready"
-	}
-
-	return Status{
-		Ready:   result.OK,
-		Summary: summary,
-		Items:   result.Items,
-	}
-}
-
-func RunPreflight(cfg config.Config) Result {
-	items := []Item{
-		checkConfiguredPath("external mount path configured", cfg.ExternalMountPath),
-		checkPathExists("external mount path exists", cfg.ExternalMountPath),
-		checkConfiguredPath("docker storage path configured", cfg.DockerStoragePath),
-		checkPathExists("docker storage path exists", cfg.DockerStoragePath),
-		checkWritableDirectory("docker storage path writable", cfg.DockerStoragePath),
-		checkMinimumFreeSpace(cfg.DockerStoragePath, cfg.MinimumFreeSpaceGB),
-		checkConfiguredPath("docker desktop settings path configured", cfg.DockerDesktopConfig.SettingsPath),
-		checkPathExists("docker desktop settings file exists", cfg.DockerDesktopConfig.SettingsPath),
-		checkSettingsContainStoragePath(cfg.DockerDesktopConfig.SettingsPath, cfg.DockerStoragePath),
-	}
-
-	if cfg.DockerDesktopConfig.FailIfAlreadyRunning {
-		items = append(items, checkDockerDesktopNotRunning())
-	}
-
-	ok := true
+// AllOK reports whether every item passed.
+func AllOK(items []Item) bool {
 	for _, item := range items {
 		if !item.OK {
-			ok = false
+			return false
 		}
 	}
+	return true
+}
 
-	return Result{
-		OK:    ok,
-		Items: items,
+// SkipAll marks items as skipped because the drive isn't mounted (spec §5).
+func SkipAll(items []Item) []Item {
+	skipped := make([]Item, len(items))
+	for i, item := range items {
+		skipped[i] = Item{Name: item.Name, OK: false, Skipped: true, Message: "skipped: drive not mounted"}
+	}
+	return skipped
+}
+
+// Drive returns C1: the drive is configured and mounted. These keep their v0.1 names.
+func Drive(path string) []Item {
+	return []Item{
+		ConfiguredPath("external mount path configured", path),
+		PathExists("external mount path exists", path),
 	}
 }
 
-func checkConfiguredPath(name, path string) Item {
+// DriveMounted reports whether the drive path exists.
+func DriveMounted(path string) bool {
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// ConfiguredPath fails when a required path is empty.
+func ConfiguredPath(name, path string) Item {
 	if path == "" {
 		return Item{Name: name, OK: false, Message: "missing value"}
 	}
@@ -84,7 +64,8 @@ func checkConfiguredPath(name, path string) Item {
 	return Item{Name: name, OK: true, Message: path}
 }
 
-func checkPathExists(name, path string) Item {
+// PathExists is C2.
+func PathExists(name, path string) Item {
 	if path == "" {
 		return Item{Name: name, OK: false, Message: "missing path"}
 	}
@@ -105,7 +86,8 @@ func checkPathExists(name, path string) Item {
 	return Item{Name: name, OK: true, Message: fmt.Sprintf("%s present", kind)}
 }
 
-func checkWritableDirectory(name, path string) Item {
+// WritableDirectory is C3.
+func WritableDirectory(name, path string) Item {
 	if path == "" {
 		return Item{Name: name, OK: false, Message: "missing path"}
 	}
@@ -131,7 +113,8 @@ func checkWritableDirectory(name, path string) Item {
 	return Item{Name: name, OK: true, Message: "temporary file create succeeded"}
 }
 
-func checkMinimumFreeSpace(path string, minimumGB int) Item {
+// MinimumFreeSpace is C4.
+func MinimumFreeSpace(path string, minimumGB int) Item {
 	if path == "" {
 		return Item{Name: "minimum free space", OK: false, Message: "missing path"}
 	}
@@ -156,55 +139,84 @@ func checkMinimumFreeSpace(path string, minimumGB int) Item {
 	}
 }
 
-func checkSettingsContainStoragePath(settingsPath, dockerStoragePath string) Item {
+// UnderDrive is C6: the path resolves to somewhere under the drive.
+func UnderDrive(name, path, drive string) Item {
+	if path == "" || drive == "" {
+		return Item{Name: name, OK: false, Message: "missing path"}
+	}
+
+	resolvedPath := resolve(path)
+	resolvedDrive := resolve(drive)
+	if isWithin(resolvedPath, resolvedDrive) {
+		return Item{Name: name, OK: true, Message: resolvedPath}
+	}
+
+	return Item{
+		Name:    name,
+		OK:      false,
+		Message: fmt.Sprintf("not on the drive: %s is outside %s", resolvedPath, resolvedDrive),
+	}
+}
+
+// resolve follows symlinks. For a path that doesn't exist yet, it resolves the nearest existing
+// parent and keeps the rest, so /var/x and /private/var/x compare equal on macOS.
+func resolve(path string) string {
+	clean := filepath.Clean(path)
+	rest := ""
+	for dir := clean; ; dir = filepath.Dir(dir) {
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(resolved, rest)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return clean
+		}
+		rest = filepath.Join(filepath.Base(dir), rest)
+	}
+}
+
+func isWithin(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
+// SettingsContainStoragePath checks Docker Desktop's settings file points at the storage path.
+func SettingsContainStoragePath(settingsPath, dockerStoragePath string) Item {
+	const name = "docker desktop settings match storage path"
 	if settingsPath == "" {
-		return Item{Name: "docker desktop settings match storage path", OK: false, Message: "missing settings path"}
+		return Item{Name: name, OK: false, Message: "missing settings path"}
 	}
 
 	if dockerStoragePath == "" {
-		return Item{Name: "docker desktop settings match storage path", OK: false, Message: "missing docker storage path"}
+		return Item{Name: name, OK: false, Message: "missing docker storage path"}
 	}
 
 	content, err := os.ReadFile(settingsPath)
 	if err != nil {
-		return Item{Name: "docker desktop settings match storage path", OK: false, Message: err.Error()}
+		return Item{Name: name, OK: false, Message: err.Error()}
 	}
 
 	expected := filepath.Clean(dockerStoragePath)
 
 	paths, err := extractSettingsPaths(content)
 	if err != nil {
-		return Item{Name: "docker desktop settings match storage path", OK: false, Message: fmt.Sprintf("parse settings JSON: %v", err)}
+		return Item{Name: name, OK: false, Message: fmt.Sprintf("parse settings JSON: %v", err)}
 	}
 
 	for _, candidate := range paths {
 		if filepath.Clean(candidate) == expected {
-			return Item{
-				Name:    "docker desktop settings match storage path",
-				OK:      true,
-				Message: expected,
-			}
+			return Item{Name: name, OK: true, Message: expected}
 		}
 	}
 
 	return Item{
-		Name:    "docker desktop settings match storage path",
+		Name:    name,
 		OK:      false,
 		Message: fmt.Sprintf("expected path not found in recognized settings keys: %s", expected),
 	}
-}
-
-func checkDockerDesktopNotRunning() Item {
-	running, err := isDockerDesktopRunning()
-	if err != nil {
-		return Item{Name: "docker desktop not already running", OK: false, Message: err.Error()}
-	}
-
-	if running {
-		return Item{Name: "docker desktop not already running", OK: false, Message: "Docker Desktop is already running"}
-	}
-
-	return Item{Name: "docker desktop not already running", OK: true, Message: "not running"}
 }
 
 func extractSettingsPaths(content []byte) ([]string, error) {

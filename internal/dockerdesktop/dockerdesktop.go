@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-
-	"github.com/platform41/dockguard/internal/config"
 )
 
 var (
@@ -14,12 +12,18 @@ var (
 	runStatus = runStatusCommand
 )
 
-func Start(cfg config.Config) error {
+// StartOptions controls how Start behaves.
+type StartOptions struct {
+	RequireCLIStartSupport bool
+	FailIfAlreadyRunning   bool
+}
+
+func Start(opts StartOptions) error {
 	if _, err := lookPath("docker"); err != nil {
 		return fmt.Errorf("docker CLI not found in PATH: %w", err)
 	}
 
-	if cfg.DockerDesktopConfig.FailIfAlreadyRunning {
+	if opts.FailIfAlreadyRunning {
 		running, err := IsRunning()
 		if err != nil {
 			return fmt.Errorf("check whether Docker Desktop is already running: %w", err)
@@ -30,7 +34,7 @@ func Start(cfg config.Config) error {
 	}
 
 	if err := runCmd("docker", "desktop", "start"); err != nil {
-		if cfg.DockerDesktopConfig.RequireCLIStartSupport {
+		if opts.RequireCLIStartSupport {
 			if isUnsupportedDesktopCLIError(err) {
 				return fmt.Errorf("docker desktop start not supported; Docker Desktop 4.37+ required: %w", err)
 			}

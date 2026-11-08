@@ -2,6 +2,26 @@
 
 All notable changes to DockGuard are documented in this file.
 
+## [Unreleased] - v0.2.0
+
+### Added
+- Targets: the config lists the applications DockGuard manages under `targets:`, each with a `kind`. This release supports `docker-desktop`; `app`, `postgres` and `container` are planned.
+- `dockguard list` shows every target with its state (running, partial, stopped or unknown) and path.
+- `check`, `start` and `stop` take an optional target name; without one they act on `docker`.
+- Config lookup also checks `~/.config/dockguard/dockguard.yaml`; `list` and `status` print the file used.
+- Eject rule: `stop --eject` ejects only when every target is confirmed stopped after a fresh check, waiting up to 30 seconds for the target just stopped.
+- A new check that the Docker storage path is on the drive (new-format configs).
+
+### Changed
+- Config is parsed with `gopkg.in/yaml.v3`; unknown keys and kinds are errors.
+- `status` covers every target and no longer reports "not ready" just because Docker Desktop is running.
+- A missing config file is now an error instead of a silent fallback to built-in defaults.
+- When the drive isn't mounted, the checks that depend on it are shown as skipped.
+- The example config and README use the current format and a generic drive path.
+
+### Compatibility
+- v0.1 config files still load as a single `docker` target; `status` suggests the new format.
+
 ## [v0.1.2] - 2026-04-27
 
 ### Added
