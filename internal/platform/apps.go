@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 )
 
@@ -30,10 +31,11 @@ func QuitApp(app string) error {
 	return nil
 }
 
-// ProcessRunning reports whether a process with exactly this name is running. pgrep exits 0 when
+// ProcessRunning reports whether a process with exactly this name is running, matched literally. pgrep exits 0 when
 // it finds one and 1 when it finds none; anything else is an error, never a guess.
 func ProcessRunning(name string) (bool, error) {
-	code, err := runPgrep("pgrep", "-x", name)
+	// pgrep matches a regular expression; escape the name so "+", "(" and "." match literally.
+	code, err := runPgrep("pgrep", "-x", regexp.QuoteMeta(name))
 	switch {
 	case err == nil && code == 0:
 		return true, nil

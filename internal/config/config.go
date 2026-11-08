@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/platform41/dockguard/internal/pathutil"
 )
 
 // DefaultConfigPath is the file looked for in the current folder (v0.1 behaviour).
@@ -402,16 +404,15 @@ func rejectCoreSimulator(path string) error {
 	}
 	devices := filepath.Join(home, "Library", "Developer", "CoreSimulator", "Devices")
 	clean := filepath.Clean(path)
-	if within(clean, devices) || within(devices, clean) {
+
+	// Compare both the spellings and the real paths, so an alias such as a symlink to
+	// CoreSimulator can't slip past the rule.
+	realPath, realDevices := pathutil.Resolve(clean), pathutil.Resolve(devices)
+	if pathutil.Within(clean, devices) || pathutil.Within(devices, clean) ||
+		pathutil.Within(realPath, realDevices) || pathutil.Within(realDevices, realPath) {
 		return fmt.Errorf("symlink_paths can't include %s: moving simulator devices to an external drive breaks `simctl create`, with no workaround", clean)
 	}
 	return nil
-}
-
-// within reports whether path is dir or inside it.
-func within(path, dir string) bool {
-	rel, err := filepath.Rel(dir, path)
-	return err == nil && (rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))))
 }
 
 // v0.1 format: one Docker Desktop setup, mapped to a single target named "docker".

@@ -341,3 +341,26 @@ func TestAppRejectsCoreSimulator(t *testing.T) {
 		t.Fatalf("DerivedData rejected: %v", err)
 	}
 }
+
+// Review on PR #6: a symlinked parent can't be used to slip CoreSimulator past D-013.
+func TestAppRejectsCoreSimulatorThroughAlias(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	coreSim := filepath.Join(home, "Library", "Developer", "CoreSimulator")
+	if err := os.MkdirAll(filepath.Join(coreSim, "Devices"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(coreSim, filepath.Join(home, "sim-alias")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(home, "Library"), filepath.Join(home, "lib-alias")); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{"~/sim-alias/Devices", "~/sim-alias", "~/lib-alias/Developer"} {
+		_, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  xcode:\n    kind: app\n    app: Xcode\n    symlink_paths: [" + path + "]\n"))
+		if err == nil || !strings.Contains(err.Error(), "simctl create") {
+			t.Fatalf("%s: error = %v, want the CoreSimulator reason", path, err)
+		}
+	}
+}

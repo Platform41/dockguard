@@ -69,3 +69,20 @@ func TestProcessRunning(t *testing.T) {
 		}
 	}
 }
+
+// Review on PR #6: pgrep -x takes a regular expression, so "DG+Probe" must be escaped or a running
+// app reads as stopped.
+func TestProcessRunningEscapesRegexCharacters(t *testing.T) {
+	original := runPgrep
+	t.Cleanup(func() { runPgrep = original })
+
+	var got []string
+	runPgrep = func(name string, args ...string) (int, error) { got = args; return 0, nil }
+
+	if _, err := ProcessRunning("DG+Probe (1).app"); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0] != "-x" || got[1] != `DG\+Probe \(1\)\.app` {
+		t.Fatalf("pgrep args = %q", got)
+	}
+}
