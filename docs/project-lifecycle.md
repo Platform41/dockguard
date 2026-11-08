@@ -2,7 +2,7 @@
 
 **Status:** Active
 **Repository:** `dockguard`
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-11-08
 **Primary Platform:** macOS
 **Implementation Language:** Go
 **Product Type:** CLI
@@ -21,6 +21,9 @@ The product goal for v1 is narrow and operational:
 - start Docker Desktop only when checks pass
 
 DockGuard is not a Docker replacement, migration tool, or runtime recovery system.
+
+**From v0.2.0 (D-005):** the same protection extends to other applications whose data lives on
+the external drive: GUI apps (Xcode), PostgreSQL clusters and Apple `container` stacks (Fizzy). See [`specs/multi-target.md`](specs/multi-target.md).
 
 ---
 
@@ -66,6 +69,14 @@ Working product promise:
 - Docker Desktop settings validation against the expected path
 - controlled startup through `docker desktop start`
 - clear terminal output and non-zero exit codes on failure
+
+### In Scope from v0.2.0 (D-005 to D-011)
+
+- managed targets of four kinds: `docker-desktop`, `app`, `postgres` (D-016), `container`
+- commands in the form `dockguard <action> [target]`, plus `dockguard list`
+- `yaml.v3` config with a `targets:` section; v0.1 config still read; the config at
+  `~/.config/dockguard/dockguard.yaml` is the record of managed apps (D-015)
+- still macOS-only and CLI-only; OS commands kept in `internal/platform` for later systems
 
 ### Out of Scope for v1
 
@@ -162,6 +173,9 @@ Initial command surface for the MVP:
 Deferred command:
 
 - `doctor` stays out of the MVP unless implementation pressure proves it necessary
+
+From v0.2.0 the command set is `list`, `status`, `check`, `start` and `stop`, each taking an
+optional target (D-006, D-008). Full behaviour: [`specs/multi-target.md`](specs/multi-target.md) §2.
 
 ---
 
@@ -323,14 +337,10 @@ Release checklist:
 
 ## 12. Current Next Step
 
-Immediate next execution step:
+`v0.1.0` to `v0.1.2` shipped on 2026-04-27. Next is multi-target support:
 
-- turn the docs baseline into the actual Go repo skeleton and initial CLI commands
-
-Near-term build order:
-
-1. scaffold the Go module and command entrypoint
-2. define config loading and output contracts
-3. implement `status` and `check`
-4. implement guarded `start`
-5. tag the first coherent baseline when the workflow criteria are met
+1. Merge [`specs/multi-target.md`](specs/multi-target.md); its decisions (D-005 to D-016) were approved on
+   2026-11-08
+2. `v0.2.0`: target layer, `list`, Docker Desktop moved onto it with v0.1 behaviour kept
+3. `v0.3.0`: `app` (Xcode) and `postgres` kinds
+4. `v0.4.0`: `container` kind (Fizzy) and `stop --all --eject`
