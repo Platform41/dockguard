@@ -12,6 +12,7 @@ import (
 	"github.com/platform41/dockguard/internal/output"
 	"github.com/platform41/dockguard/internal/platform"
 	"github.com/platform41/dockguard/internal/target"
+	appkind "github.com/platform41/dockguard/internal/target/app"
 	"github.com/platform41/dockguard/internal/target/dockerdesktop"
 )
 
@@ -144,6 +145,8 @@ func defaultBuildTargets(cfg config.Config) ([]entry, error) {
 		switch t.Kind {
 		case config.KindDockerDesktop:
 			entries = append(entries, entry{t: dockerdesktop.New(t, cfg.Drive, cfg.Legacy), cfg: t})
+		case config.KindApp:
+			entries = append(entries, entry{t: appkind.New(t, cfg.Drive), cfg: t})
 		default:
 			return nil, fmt.Errorf("target %q: kind %q is not supported", t.Name, t.Kind)
 		}
@@ -162,8 +165,11 @@ func find(entries []entry, name string) (entry, bool) {
 
 // display is how messages name a target; Docker keeps its v0.1 wording.
 func display(e entry) string {
-	if e.t.Kind() == config.KindDockerDesktop {
+	switch {
+	case e.t.Kind() == config.KindDockerDesktop:
 		return "Docker Desktop"
+	case e.cfg.App != nil:
+		return e.cfg.App.Name
 	}
 	return e.t.Name()
 }

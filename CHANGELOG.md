@@ -2,6 +2,12 @@
 
 All notable changes to DockGuard are documented in this file.
 
+## [Unreleased] - v0.3.0
+
+### Added
+- `app` target kind for macOS GUI apps such as Xcode: `symlink_paths` must each resolve to the drive, `start` opens the app with `open -a`, and `stop` asks it to quit only once it's confirmed running.
+- `~/Library/Developer/CoreSimulator/Devices`, anything inside it, and any folder containing it are rejected in `symlink_paths`.
+
 ## [v0.2.0] - 2026-11-08
 
 ### Added

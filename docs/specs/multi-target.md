@@ -191,7 +191,7 @@ Every kind uses the shared checks in §5 and adds its own.
 | Optional keys | `process` (default: `app`), `symlink_paths`, `fail_if_already_running` (default true) |
 | Checks | Each symlink path resolves to somewhere on the drive. A broken link fails. A plain folder that is **not** a link fails too, with "not on the drive", because it means the app's data has silently been recreated on the internal disk. |
 | Start | `open -a <app>` |
-| Stop | Asks the app to quit (`osascript -e 'quit app "<app>"'`), which lets it save. No force-quit. |
+| Stop | Asks the app to quit (`osascript -e 'quit app "<app>"'`), which lets it save. No force-quit. Only sent once `pgrep` confirms the app is running, so it never launches the app just to quit it; if the state is unknown, stop fails. |
 | Running | `pgrep -x <process>` |
 
 **CoreSimulator (D-013):** `~/Library/Developer/CoreSimulator/Devices` is never accepted in

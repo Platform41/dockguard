@@ -149,8 +149,18 @@ target: {}
 		{"planned kind", `
 drive: /Volumes/X
 targets:
-  xcode: {kind: app, app: Xcode}
-`, []string{`kind "app" is planned for v0.3.0`}},
+  db: {kind: postgres, data_dir: /x}
+`, []string{`kind "postgres" is planned for v0.3.0`}},
+		{"app without app", `
+drive: /Volumes/X
+targets:
+  xcode: {kind: app}
+`, []string{`missing required key "app"`}},
+		{"app with a docker key", `
+drive: /Volumes/X
+targets:
+  xcode: {kind: app, app: Xcode, storage_path: /x}
+`, []string{`unknown key "storage_path"`}},
 		{"missing kind", `
 drive: /Volumes/X
 targets:
@@ -274,5 +284,114 @@ func TestDetectSettingsPathFallsBackToFirstCandidate(t *testing.T) {
 	expected := filepath.Join(home, "Library", "Application Support", "Docker", "settings-store.json")
 	if resolved != expected {
 		t.Fatalf("detectSettingsPath() = %q, want %q", resolved, expected)
+	}
+}
+
+func TestLoadReadsAppTarget(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfg, err := Parse([]byte(`
+drive: /Volumes/ExternalSSD
+targets:
+  xcode:
+    kind: app
+    app: Xcode
+    symlink_paths:
+      - ~/Library/Developer/Xcode/DerivedData
+      - ~/Library/Developer/Xcode/Archives
+  preview:
+    kind: app
+    app: Preview
+    process: PreviewHelper
+    fail_if_already_running: false
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	xcode := cfg.Targets[0]
+	if xcode.Kind != KindApp || xcode.App.Name != "Xcode" || xcode.App.Process != "Xcode" || !xcode.FailIfAlreadyRunning {
+		t.Fatalf("xcode = %#v / %#v", xcode, xcode.App)
+	}
+	want := filepath.Join(home, "Library", "Developer", "Xcode", "DerivedData")
+	if len(xcode.App.SymlinkPaths) != 2 || xcode.App.SymlinkPaths[0] != want {
+		t.Fatalf("SymlinkPaths = %v", xcode.App.SymlinkPaths)
+	}
+	preview := cfg.Targets[1]
+	if preview.App.Process != "PreviewHelper" || preview.FailIfAlreadyRunning {
+		t.Fatalf("preview = %#v / %#v", preview, preview.App)
+	}
+}
+
+// AS-14: CoreSimulator devices, anything inside them, and any folder holding them are rejected.
+func TestAppRejectsCoreSimulator(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for _, path := range []string{
+		"~/Library/Developer/CoreSimulator/Devices",
+		"~/Library/Developer/CoreSimulator/Devices/ABC-123",
+		"~/Library/Developer/CoreSimulator",
+		"~/Library/Developer",
+	} {
+		_, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  xcode:\n    kind: app\n    app: Xcode\n    symlink_paths: [" + path + "]\n"))
+		if err == nil || !strings.Contains(err.Error(), "simctl create") {
+			t.Fatalf("%s: error = %v, want the CoreSimulator reason", path, err)
+		}
+	}
+
+	if _, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  xcode:\n    kind: app\n    app: Xcode\n    symlink_paths: [~/Library/Developer/Xcode/DerivedData]\n")); err != nil {
+		t.Fatalf("DerivedData rejected: %v", err)
+	}
+}
+
+// Review on PR #6: a symlinked parent can't be used to slip CoreSimulator past D-013.
+func TestAppRejectsCoreSimulatorThroughAlias(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	coreSim := filepath.Join(home, "Library", "Developer", "CoreSimulator")
+	if err := os.MkdirAll(filepath.Join(coreSim, "Devices"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(coreSim, filepath.Join(home, "sim-alias")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(home, "Library"), filepath.Join(home, "lib-alias")); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{"~/sim-alias/Devices", "~/sim-alias", "~/lib-alias/Developer"} {
+		_, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  xcode:\n    kind: app\n    app: Xcode\n    symlink_paths: [" + path + "]\n"))
+		if err == nil || !strings.Contains(err.Error(), "simctl create") {
+			t.Fatalf("%s: error = %v, want the CoreSimulator reason", path, err)
+		}
+	}
+}
+
+// Re-review on PR #6: "~/child-alias/../Devices" with child-alias -> CoreSimulator/Child reaches
+// Devices, because the filesystem follows the link before "..". It must be rejected.
+func TestAppRejectsCoreSimulatorThroughAliasAndParentTraversal(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	coreSim := filepath.Join(home, "Library", "Developer", "CoreSimulator")
+	for _, dir := range []string{"Devices", "Child"} {
+		if err := os.MkdirAll(filepath.Join(coreSim, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(coreSim, "Child"), filepath.Join(home, "child-alias")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  xcode:\n    kind: app\n    app: Xcode\n    symlink_paths: [~/child-alias/../Devices]\n"))
+	if err == nil || !strings.Contains(err.Error(), "simctl create") {
+		t.Fatalf("error = %v, want the CoreSimulator reason", err)
+	}
+}
+
+// Expanding "~" must not collapse "..": the filesystem resolves symlinks before "..", so the
+// spelling is kept for the checks to resolve.
+func TestExpandPathKeepsParentTraversal(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if got, want := expandPath("~/a/../b"), home+"/a/../b"; got != want {
+		t.Fatalf("expandPath = %q, want %q", got, want)
 	}
 }

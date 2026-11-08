@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/platform41/dockguard/internal/pathutil"
 )
 
 // DefaultConfigPath is the file looked for in the current folder (v0.1 behaviour).
@@ -33,7 +35,6 @@ const (
 
 // plannedKinds are in the spec but not built yet.
 var plannedKinds = map[string]string{
-	KindApp:       "v0.3.0",
 	KindPostgres:  "v0.3.0",
 	KindContainer: "v0.4.0",
 }
@@ -61,6 +62,7 @@ type Target struct {
 	MinimumFreeSpaceGB   int
 	FailIfAlreadyRunning bool
 	DockerDesktop        *DockerDesktop
+	App                  *App
 }
 
 // DockerDesktop holds the keys of a docker-desktop target.
@@ -68,6 +70,16 @@ type DockerDesktop struct {
 	StoragePath            string
 	SettingsPath           string
 	RequireCLIStartSupport bool
+}
+
+// App holds the keys of an app target.
+type App struct {
+	// Name is what `open -a` takes, for example "Xcode".
+	Name string
+	// Process is the process name pgrep looks for; it defaults to Name.
+	Process string
+	// SymlinkPaths are paths on the internal disk that link to the drive.
+	SymlinkPaths []string
 }
 
 // Find returns the target with the given name.
@@ -251,6 +263,7 @@ type dockerDesktopKeys struct {
 
 var allowedKeys = map[string][]string{
 	KindDockerDesktop: {"kind", "storage_path", "settings_path", "require_cli_start_support", "fail_if_already_running", "minimum_free_space_gb"},
+	KindApp:           {"kind", "app", "process", "symlink_paths", "fail_if_already_running"},
 }
 
 func parseTarget(name string, node *yaml.Node, defaultFreeGB int) (Target, error) {
@@ -282,7 +295,12 @@ func parseTarget(name string, node *yaml.Node, defaultFreeGB int) (Target, error
 		return Target{}, err
 	}
 
-	return parseDockerDesktop(name, node, defaultFreeGB)
+	switch kind {
+	case KindApp:
+		return parseApp(name, node)
+	default:
+		return parseDockerDesktop(name, node, defaultFreeGB)
+	}
 }
 
 func checkKeys(keys map[string]int, allowed []string) error {
@@ -337,6 +355,69 @@ func parseDockerDesktop(name string, node *yaml.Node, defaultFreeGB int) (Target
 		target.DockerDesktop.SettingsPath = settings
 	}
 	return target, nil
+}
+
+type appKeys struct {
+	Kind                 string   `yaml:"kind"`
+	App                  string   `yaml:"app"`
+	Process              string   `yaml:"process"`
+	SymlinkPaths         []string `yaml:"symlink_paths"`
+	FailIfAlreadyRunning *bool    `yaml:"fail_if_already_running"`
+}
+
+func parseApp(name string, node *yaml.Node) (Target, error) {
+	var keys appKeys
+	if err := node.Decode(&keys); err != nil {
+		return Target{}, err
+	}
+	appName := strings.TrimSpace(keys.App)
+	if appName == "" {
+		return Target{}, errors.New("missing required key \"app\"")
+	}
+
+	app := &App{Name: appName, Process: stringOr(strings.TrimSpace(keys.Process), appName)}
+	for _, raw := range keys.SymlinkPaths {
+		path := cleanPath(raw)
+		if path == "" {
+			return Target{}, errors.New("symlink_paths has an empty entry")
+		}
+		if err := rejectCoreSimulator(path); err != nil {
+			return Target{}, err
+		}
+		app.SymlinkPaths = append(app.SymlinkPaths, path)
+	}
+
+	return Target{
+		Name:                 name,
+		Kind:                 KindApp,
+		FailIfAlreadyRunning: boolOr(keys.FailIfAlreadyRunning, true),
+		App:                  app,
+	}, nil
+}
+
+// rejectCoreSimulator enforces D-013: simulator devices break on an external drive, so DockGuard
+// refuses the Devices folder, anything inside it, and any folder that contains it.
+func rejectCoreSimulator(path string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	devices := filepath.Join(home, "Library", "Developer", "CoreSimulator", "Devices")
+	clean := filepath.Clean(path)
+
+	// Compare both the spellings and the real paths, so an alias such as a symlink to
+	// CoreSimulator can't slip past the rule. The real path is resolved from the path as written:
+	// cleaning first would drop "link/.." before the link is followed.
+	realPath, realDevices := pathutil.Resolve(path), pathutil.Resolve(devices)
+	if pathutil.Within(clean, devices) || pathutil.Within(devices, clean) ||
+		pathutil.Within(realPath, realDevices) || pathutil.Within(realDevices, realPath) {
+		shown := path
+		if realPath != path {
+			shown = fmt.Sprintf("%s (reaches %s)", path, realPath)
+		}
+		return fmt.Errorf("symlink_paths can't include %s: moving simulator devices to an external drive breaks `simctl create`, with no workaround", shown)
+	}
+	return nil
 }
 
 // v0.1 format: one Docker Desktop setup, mapped to a single target named "docker".
@@ -463,7 +544,9 @@ func expandPath(path string) string {
 
 	if strings.HasPrefix(path, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, strings.TrimPrefix(path, "~/"))
+			// Concatenate rather than filepath.Join, which would collapse ".." before any symlink
+			// is followed and change which folder the path reaches.
+			return strings.TrimSuffix(home, string(filepath.Separator)) + string(filepath.Separator) + strings.TrimPrefix(path, "~/")
 		}
 	}
 

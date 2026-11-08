@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/platform41/dockguard/internal/pathutil"
 )
 
 // Item is the result of one check.
@@ -145,9 +147,9 @@ func UnderDrive(name, path, drive string) Item {
 		return Item{Name: name, OK: false, Message: "missing path"}
 	}
 
-	resolvedPath := resolve(path)
-	resolvedDrive := resolve(drive)
-	if isWithin(resolvedPath, resolvedDrive) {
+	resolvedPath := pathutil.Resolve(path)
+	resolvedDrive := pathutil.Resolve(drive)
+	if pathutil.Within(resolvedPath, resolvedDrive) {
 		return Item{Name: name, OK: true, Message: resolvedPath}
 	}
 
@@ -156,69 +158,6 @@ func UnderDrive(name, path, drive string) Item {
 		OK:      false,
 		Message: fmt.Sprintf("not on the drive: %s is outside %s", resolvedPath, resolvedDrive),
 	}
-}
-
-// maxSymlinks bounds symlink chains, as the kernel does, so a loop can't hang a check.
-const maxSymlinks = 40
-
-// resolve returns the real path the filesystem would reach. It walks the path one part at a time
-// and follows each symlink before applying a later "..", so "drive/link/../x" resolves through
-// the link's target. Cleaning first would drop "link/.." and wrongly stay on the drive.
-//
-// Once a part doesn't exist, the rest is joined as written, so a path that isn't created yet
-// still resolves through its existing parents (/var/x and /private/var/x compare equal on macOS).
-func resolve(path string) string {
-	if !filepath.IsAbs(path) {
-		if wd, err := os.Getwd(); err == nil {
-			path = wd + string(filepath.Separator) + path
-		}
-	}
-	return walk(path, 0)
-}
-
-func walk(path string, depth int) string {
-	parts := strings.Split(path, string(filepath.Separator))
-	current := string(filepath.Separator)
-
-	for i, part := range parts {
-		switch part {
-		case "", ".":
-			continue
-		case "..":
-			current = filepath.Dir(current)
-			continue
-		}
-
-		next := filepath.Join(current, part)
-		info, err := os.Lstat(next)
-		if err != nil {
-			return filepath.Join(current, strings.Join(parts[i:], string(filepath.Separator)))
-		}
-
-		if info.Mode()&os.ModeSymlink == 0 {
-			current = next
-			continue
-		}
-
-		link, err := os.Readlink(next)
-		if err != nil || depth >= maxSymlinks {
-			return filepath.Join(current, strings.Join(parts[i:], string(filepath.Separator)))
-		}
-		if !filepath.IsAbs(link) {
-			link = current + string(filepath.Separator) + link
-		}
-		current = walk(link, depth+1)
-	}
-
-	return current
-}
-
-func isWithin(path, dir string) bool {
-	rel, err := filepath.Rel(dir, path)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 // SettingsContainStoragePath checks Docker Desktop's settings file points at the storage path.
