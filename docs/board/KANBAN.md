@@ -59,13 +59,12 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.3.0] postgres kind (pg_ctl clusters)`
-  **Owner:** Three
-  **Priority:** P2
-  **Outcome:** AS-15 to AS-17, AS-23, AS-25, AS-26
-  **Source docs:** `docs/specs/multi-target.md` §4.3
-  **Dependencies:** v0.2.0 (D-016)
-  **Branch:** `feat/postgres-kind`
+- [ ] `[v0.3.0] Release: notes, CHANGELOG, live check, tag`
+  **Owner:** One
+  **Priority:** P1
+  **Branch:** `chore/release-v0.3.0`
+  **Deliverable:** `docs/releases/v0.3.0.md`, dated CHANGELOG, tag `v0.3.0`
+  **Waiting on:** Live check from the internal disk with Docker, Xcode and a PostgreSQL cluster configured: start and stop each, and confirm `stop --eject` refuses while any is running. Tag after merge.
 
 ### Blocked
 
@@ -77,6 +76,15 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.3.0] postgres kind (pg_ctl clusters)`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** AS-15 to AS-17, AS-23, AS-25, AS-26
+  **Source docs:** `docs/specs/multi-target.md` §4.3
+  **Dependencies:** v0.2.0 (D-016)
+  **Completed:** 2026-11-08
+  **Branch:** `feat/postgres-kind` (PR #7, merge `d6112f2`)
 
 - [x] `[v0.3.0] app kind (Xcode) from the June Xcode work`
   **Owner:** Three
