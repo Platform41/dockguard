@@ -73,29 +73,12 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.2.0] Target layer: yaml.v3 config, Target interface, Docker Desktop on it`
-  **Owner:** Three
+- [ ] `[v0.2.0] Release: notes, CHANGELOG, live check, tag`
+  **Owner:** One
   **Priority:** P1
-  **Outcome:** Docker behaves as in v0.1.2 (AS-01, AS-08); legacy config still loads (AS-02, AS-03, AS-04)
-  **Source docs:** `docs/specs/multi-target.md` §3, §4.1, §6
-  **Dependencies:** Spec approved
-  **Branch:** `feat/target-layer`
-
-- [ ] `[v0.2.0] list command, status across targets, target argument on check/start/stop`
-  **Owner:** Three
-  **Priority:** P1
-  **Outcome:** AS-05, AS-06, AS-07, AS-09, AS-21, AS-22
-  **Source docs:** `docs/specs/multi-target.md` §2, §3 (config lookup, D-015)
-  **Dependencies:** Target layer
-  **Branch:** `feat/target-layer`
-
-- [ ] `[v0.2.0] Eject rule: eject only when every target is confirmed stopped`
-  **Owner:** Three
-  **Priority:** P1
-  **Outcome:** AS-10, AS-27, AS-28
-  **Source docs:** `docs/specs/multi-target.md` §2
-  **Dependencies:** Target layer
-  **Branch:** `feat/target-layer`
+  **Branch:** `chore/release-v0.2.0`
+  **Deliverable:** `docs/releases/v0.2.0.md`, dated CHANGELOG, tag `v0.2.0`
+  **Waiting on:** Live check from a checkout on the internal disk: `dockguard start`, then `dockguard stop --eject` with only Docker running. Tag after merge.
 
 ### Blocked
 
@@ -107,6 +90,33 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.2.0] Target layer: yaml.v3 config, Target interface, Docker Desktop on it`
+  **Owner:** Three
+  **Priority:** P1
+  **Outcome:** Docker behaves as in v0.1.2 (AS-01, AS-08); legacy config still loads (AS-02, AS-03, AS-04)
+  **Source docs:** `docs/specs/multi-target.md` §3, §4.1, §6
+  **Dependencies:** Spec approved
+  **Completed:** 2026-11-08
+  **Branch:** `feat/target-layer` (PR #4, merge `f7de145`)
+
+- [x] `[v0.2.0] list command, status across targets, target argument on check/start/stop`
+  **Owner:** Three
+  **Priority:** P1
+  **Outcome:** AS-05, AS-06, AS-07, AS-09, AS-21, AS-22
+  **Source docs:** `docs/specs/multi-target.md` §2, §3 (config lookup, D-015)
+  **Dependencies:** Target layer
+  **Completed:** 2026-11-08
+  **Branch:** `feat/target-layer` (PR #4, merge `f7de145`)
+
+- [x] `[v0.2.0] Eject rule: eject only when every target is confirmed stopped`
+  **Owner:** Three
+  **Priority:** P1
+  **Outcome:** AS-10, AS-27, AS-28
+  **Source docs:** `docs/specs/multi-target.md` §2
+  **Dependencies:** Target layer
+  **Completed:** 2026-11-08
+  **Branch:** `feat/target-layer` (PR #4, merge `f7de145`)
 
 - [x] `[Spec] Multi-target DockGuard (v0.2.0 to v0.4.0)`
   **Owner:** One
