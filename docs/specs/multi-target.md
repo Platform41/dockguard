@@ -1,11 +1,10 @@
 # Spec — Multi-Target DockGuard (v0.2.0 to v0.4.0)
 
-**Status:** Draft, waiting for Azrad's review
+**Status:** Approved by Azrad, 2026-11-08
 **Last Updated:** 2026-11-08
 **Owner:** One
 **Builder:** Three
-**Decisions:** D-005 to D-015 in the [board's decision log](../board/KANBAN.md#decision-log).
-Proposal P-3 (§10) needs approval before v0.3.0 is built.
+**Decisions:** D-005 to D-016 in the [board's decision log](../board/KANBAN.md#decision-log).
 
 DockGuard runs preflight checks before starting Docker Desktop when Docker's storage is on an
 external SSD. This spec extends the same protection to any application whose data lives on that
@@ -108,7 +107,7 @@ targets:
       - ~/Library/Developer/Xcode/DerivedData
       - ~/Library/Developer/Xcode/Archives
 
-  myapp-db:                       # v0.3.0 (P-3)
+  myapp-db:                       # v0.3.0 (D-016)
     kind: postgres
     data_dir: /Volumes/ExternalSSD/pgdata/myapp
     bin_dir: /opt/homebrew/opt/postgresql@17/bin   # required: the version-specific install
@@ -174,7 +173,7 @@ Every kind uses the shared checks in §5 and adds its own.
 `symlink_paths`; the config is rejected with the reason. Moving it to an external drive breaks
 `simctl create` with no workaround.
 
-### 4.3 `postgres` (v0.3.0, proposal P-3)
+### 4.3 `postgres` (v0.3.0, D-016)
 
 For a PostgreSQL cluster run directly with `pg_ctl`, which is how the Homebrew PostgreSQL 17 in the
 current setup is used (not through `brew services`). Each cluster is its own target, so
@@ -192,6 +191,11 @@ several projects can each have one.
 `bin_dir` is required, never taken from the PATH: Homebrew's `libpq` puts its own `pg_ctl` on the
 PATH, and its major version can differ from the cluster's (18 against 17 in the current setup).
 Running the wrong major version against a cluster fails or, worse, misreports its state.
+
+**Major version:** from PostgreSQL 10 the major version is the first number (`17.11` → `17`), and
+`PG_VERSION` holds just that (`17`). Before 10 it was the first two numbers (`9.6.24` → `9.6`), and
+`PG_VERSION` holds `9.6`. The check compares majors under these rules, so older clusters work.
+Older or newer versions need no code: a target with its own `bin_dir`, `data_dir` and `port`.
 
 DockGuard only passes the options in the config. It never edits `postgresql.conf`. A MySQL kind
 can follow the same pattern if one is ever needed; Fizzy's MySQL is a container (§4.4).
@@ -284,7 +288,7 @@ replace them (as `dockerdesktop` does today). Other operating systems would be a
 ### v0.3.0 — Apps and PostgreSQL
 
 1. `app` kind; Xcode in the example config
-2. `postgres` kind (P-3); a sample cluster in the example config
+2. `postgres` kind (D-016); a sample cluster in the example config
 3. The CoreSimulator rule (§4.2, D-013)
 
 ### v0.4.0 — Containers
@@ -343,6 +347,8 @@ release notes, tag after One's review.
   says so and exits 0.
 - **AS-25** Given the cluster was started by hand with `pg_ctl`, not by DockGuard, then `list`
   shows it as running and `stop myapp-db --eject` stops it before ejecting.
+- **AS-26** Given a 9.6 cluster (`PG_VERSION` is `9.6`) and a 9.6 `bin_dir`, then the version check
+  passes; with a 9.5 `bin_dir`, it fails.
 - **AS-23** Given a `postmaster.pid` whose process isn't running, then `check myapp-db` fails and
   says how to clear it.
 
@@ -371,7 +377,7 @@ release notes, tag after One's review.
 
 ## 10. Proposals needing approval
 
-P-1 and P-2 were approved on 2026-11-08 and are now D-012 and D-013.
+All approved on 2026-11-08: P-1 is D-012, P-2 is D-013, P-3 is D-016. Kept here for the reasoning.
 
 | # | Proposal | Why |
 | --- | --- | --- |

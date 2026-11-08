@@ -75,9 +75,9 @@
 - [ ] `[v0.3.0] postgres kind (pg_ctl clusters)`
   **Owner:** Three
   **Priority:** P2
-  **Outcome:** AS-15 to AS-17, AS-23, AS-25
+  **Outcome:** AS-15 to AS-17, AS-23, AS-25, AS-26
   **Source docs:** `docs/specs/multi-target.md` §4.3
-  **Dependencies:** v0.2.0; proposal P-3 approved
+  **Dependencies:** v0.2.0 (D-016)
 
 - [ ] `[v0.4.0] container kind (Fizzy) and stop --all --eject`
   **Owner:** Three
@@ -99,7 +99,7 @@ _None._
   **Priority:** P1
   **Branch:** `docs/multi-target-spec`
   **Deliverable:** `docs/specs/multi-target.md`
-  **Waiting on:** Azrad's review of the spec and proposal P-3 (`postgres` kind replaces `brew-service`)
+  **Waiting on:** PR review and merge
 
 ### Blocked
 
@@ -249,6 +249,7 @@ _None._
 | D-013 | 2026-11-08 | DockGuard rejects `~/Library/Developer/CoreSimulator/Devices` as an external path | Azrad | Was proposal P-2. Moving it to an external drive breaks `simctl create` with no fix |
 | D-014 | 2026-11-08 | Remove Fizzy's start-at-login launchd agent; Fizzy starts through `dockguard start fizzy` | Azrad | Fizzy no longer starts while the drive is missing. Done with v0.4.0 |
 | D-015 | 2026-11-08 | The config file is the record of which apps DockGuard manages; also look it up at `~/.config/dockguard/dockguard.yaml`, and `list`/`status` print the file used | Azrad | Lands in v0.2.0 |
+| D-016 | 2026-11-08 | Amends D-007: the `brew-service` kind is replaced by a `postgres` kind that runs clusters with `pg_ctl` from a required, version-specific `bin_dir` | Azrad | Was proposal P-3. PostgreSQL here runs with `pg_ctl`, not `brew services`; the `pg_ctl` on the PATH (libpq, v18) differs from the cluster (v17) |
 
 ---
 
