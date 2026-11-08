@@ -44,13 +44,6 @@
 
 ### Backlog
 
-- [ ] `[v0.3.0] app kind (Xcode) from the June Xcode work`
-  **Owner:** Three
-  **Priority:** P2
-  **Outcome:** AS-11 to AS-14
-  **Source docs:** `docs/specs/multi-target.md` §4.2, §11
-  **Dependencies:** v0.2.0; move the uncommitted Xcode work off the `master` checkout first
-
 - [ ] `[v0.3.0] postgres kind (pg_ctl clusters)`
   **Owner:** Three
   **Priority:** P2
@@ -73,12 +66,13 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.2.0] Release: notes, CHANGELOG, live check, tag`
-  **Owner:** One
-  **Priority:** P1
-  **Branch:** `chore/release-v0.2.0`
-  **Deliverable:** `docs/releases/v0.2.0.md`, dated CHANGELOG, tag `v0.2.0`
-  **Waiting on:** Live check from a checkout on the internal disk: `dockguard start`, then `dockguard stop --eject` with only Docker running. Tag after merge.
+- [ ] `[v0.3.0] app kind (Xcode) from the June Xcode work`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** AS-11 to AS-14
+  **Source docs:** `docs/specs/multi-target.md` §4.2, §11
+  **Dependencies:** v0.2.0; move the uncommitted Xcode work off the `master` checkout first
+  **Branch:** `feat/app-kind`
 
 ### Blocked
 
@@ -90,6 +84,14 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.2.0] Release: notes, CHANGELOG, live check, tag`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-11-08
+  **Branch:** `chore/release-v0.2.0` (PR #5)
+  **Deliverable:** `docs/releases/v0.2.0.md`, tag `v0.2.0` on `0cf3f8e`
+  **Notes:** Live check passed from the internal disk: start, then stop --eject with only Docker running.
 
 - [x] `[v0.2.0] Target layer: yaml.v3 config, Target interface, Docker Desktop on it`
   **Owner:** Three

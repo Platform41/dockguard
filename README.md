@@ -3,8 +3,9 @@
 DockGuard is a macOS Go CLI that runs preflight checks before starting applications whose data lives
 on an external SSD, and stops them safely before the drive is ejected.
 
-Today it manages Docker Desktop. Xcode, PostgreSQL clusters and Apple `container` stacks follow in
-v0.3.0 and v0.4.0 (see [`docs/specs/multi-target.md`](docs/specs/multi-target.md)).
+Today it manages Docker Desktop and GUI apps such as Xcode. PostgreSQL clusters and Apple
+`container` stacks follow in v0.3.0 and v0.4.0 (see
+[`docs/specs/multi-target.md`](docs/specs/multi-target.md)).
 
 ## Quickstart
 
@@ -114,6 +115,13 @@ targets:
     # settings_path: ~/Library/Application Support/Docker/settings-store.json  # auto-detected
     require_cli_start_support: true
     fail_if_already_running: true
+
+  xcode:
+    kind: app
+    app: Xcode                      # the name `open -a` takes
+    # process: Xcode                # process name for pgrep; defaults to app
+    symlink_paths:                  # internal-disk paths that link onto the drive
+      - ~/Library/Developer/Xcode/DerivedData
 ```
 
 Unknown keys and kinds are errors. Target names use lowercase letters, digits and `-`.
@@ -142,6 +150,17 @@ Recognized settings keys for storage-path validation:
 
 This settings validation is JSON-aware, but it is still based on recognized keys rather than Docker-version-specific schemas.
 
+## App checks
+
+- the drive is configured and mounted
+- each `symlink_paths` entry exists and resolves to somewhere on the drive. A plain folder on the
+  internal disk fails as "not on the drive": the app's data was recreated off the drive.
+- with `fail_if_already_running` (default on), `check` and `start` fail if the app is running
+
+`start` opens the app with `open -a`. `stop` asks it to quit, so it can save first, and only once
+it's confirmed running. `~/Library/Developer/CoreSimulator/Devices` (or any folder containing it) is
+rejected: simulator devices break on an external drive.
+
 ## Common Failures
 
 - Drive not mounted: plug in the SSD; the drive's other checks show `[skip]` until it's mounted.
@@ -160,7 +179,7 @@ dockguard/
 ├── internal/config/       # config loading and validation
 ├── internal/dockerdesktop/  # Docker Desktop CLI
 ├── internal/output/
-├── internal/platform/     # macOS commands (diskutil)
+├── internal/platform/     # macOS commands (diskutil, open, osascript, pgrep)
 ├── internal/target/       # target interface and kinds
 └── examples/
 ```

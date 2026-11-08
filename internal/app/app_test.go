@@ -377,3 +377,14 @@ func TestStatusFailsWhenAStateProbeFails(t *testing.T) {
 		t.Fatalf("output:\n%s", h.out)
 	}
 }
+
+// AS-12: with the drive unmounted, start refuses and the app isn't opened.
+func TestStartRefusesWhenDriveIsUnmounted(t *testing.T) {
+	f := &fake{name: "xcode", checksOK: true, noProbing: true}
+	h := setup(t, false, false, f)
+
+	code, err := Run([]string{"start", "xcode"})
+	if code != 1 || err == nil || f.started {
+		t.Fatalf("Run = %d, %v; started = %v\n%s", code, err, f.started, h.out)
+	}
+}

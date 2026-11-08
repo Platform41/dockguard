@@ -149,8 +149,18 @@ target: {}
 		{"planned kind", `
 drive: /Volumes/X
 targets:
-  xcode: {kind: app, app: Xcode}
-`, []string{`kind "app" is planned for v0.3.0`}},
+  db: {kind: postgres, data_dir: /x}
+`, []string{`kind "postgres" is planned for v0.3.0`}},
+		{"app without app", `
+drive: /Volumes/X
+targets:
+  xcode: {kind: app}
+`, []string{`missing required key "app"`}},
+		{"app with a docker key", `
+drive: /Volumes/X
+targets:
+  xcode: {kind: app, app: Xcode, storage_path: /x}
+`, []string{`unknown key "storage_path"`}},
 		{"missing kind", `
 drive: /Volumes/X
 targets:
@@ -274,5 +284,60 @@ func TestDetectSettingsPathFallsBackToFirstCandidate(t *testing.T) {
 	expected := filepath.Join(home, "Library", "Application Support", "Docker", "settings-store.json")
 	if resolved != expected {
 		t.Fatalf("detectSettingsPath() = %q, want %q", resolved, expected)
+	}
+}
+
+func TestLoadReadsAppTarget(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfg, err := Parse([]byte(`
+drive: /Volumes/ExternalSSD
+targets:
+  xcode:
+    kind: app
+    app: Xcode
+    symlink_paths:
+      - ~/Library/Developer/Xcode/DerivedData
+      - ~/Library/Developer/Xcode/Archives
+  preview:
+    kind: app
+    app: Preview
+    process: PreviewHelper
+    fail_if_already_running: false
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	xcode := cfg.Targets[0]
+	if xcode.Kind != KindApp || xcode.App.Name != "Xcode" || xcode.App.Process != "Xcode" || !xcode.FailIfAlreadyRunning {
+		t.Fatalf("xcode = %#v / %#v", xcode, xcode.App)
+	}
+	want := filepath.Join(home, "Library", "Developer", "Xcode", "DerivedData")
+	if len(xcode.App.SymlinkPaths) != 2 || xcode.App.SymlinkPaths[0] != want {
+		t.Fatalf("SymlinkPaths = %v", xcode.App.SymlinkPaths)
+	}
+	preview := cfg.Targets[1]
+	if preview.App.Process != "PreviewHelper" || preview.FailIfAlreadyRunning {
+		t.Fatalf("preview = %#v / %#v", preview, preview.App)
+	}
+}
+
+// AS-14: CoreSimulator devices, anything inside them, and any folder holding them are rejected.
+func TestAppRejectsCoreSimulator(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for _, path := range []string{
+		"~/Library/Developer/CoreSimulator/Devices",
+		"~/Library/Developer/CoreSimulator/Devices/ABC-123",
+		"~/Library/Developer/CoreSimulator",
+		"~/Library/Developer",
+	} {
+		_, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  xcode:\n    kind: app\n    app: Xcode\n    symlink_paths: [" + path + "]\n"))
+		if err == nil || !strings.Contains(err.Error(), "simctl create") {
+			t.Fatalf("%s: error = %v, want the CoreSimulator reason", path, err)
+		}
+	}
+
+	if _, err := Parse([]byte("drive: /Volumes/X\ntargets:\n  xcode:\n    kind: app\n    app: Xcode\n    symlink_paths: [~/Library/Developer/Xcode/DerivedData]\n")); err != nil {
+		t.Fatalf("DerivedData rejected: %v", err)
 	}
 }

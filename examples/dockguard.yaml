@@ -13,4 +13,11 @@ targets:
     fail_if_already_running: true
     # minimum_free_space_gb: 100  # per-target override
 
-# Planned kinds (docs/specs/multi-target.md): app and postgres in v0.3.0, container in v0.4.0.
+  xcode:
+    kind: app
+    app: Xcode                     # the name `open -a` takes
+    symlink_paths:                 # internal-disk paths linked onto the drive
+      - ~/Library/Developer/Xcode/DerivedData
+    # Never list ~/Library/Developer/CoreSimulator/Devices: simulators break on an external drive.
+
+# Planned kinds (docs/specs/multi-target.md): postgres in v0.3.0, container in v0.4.0.
