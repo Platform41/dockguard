@@ -35,7 +35,6 @@ const (
 
 // plannedKinds are in the spec but not built yet.
 var plannedKinds = map[string]string{
-	KindPostgres:  "v0.3.0",
 	KindContainer: "v0.4.0",
 }
 
@@ -63,6 +62,7 @@ type Target struct {
 	FailIfAlreadyRunning bool
 	DockerDesktop        *DockerDesktop
 	App                  *App
+	Postgres             *Postgres
 }
 
 // DockerDesktop holds the keys of a docker-desktop target.
@@ -80,6 +80,17 @@ type App struct {
 	Process string
 	// SymlinkPaths are paths on the internal disk that link to the drive.
 	SymlinkPaths []string
+}
+
+// Postgres holds the keys of a postgres target: one cluster run with pg_ctl (D-016).
+type Postgres struct {
+	DataDir string
+	// BinDir is the version-specific install, never taken from the PATH.
+	BinDir string
+	// Port is 0 when not set.
+	Port      int
+	SocketDir string
+	LogFile   string
 }
 
 // Find returns the target with the given name.
@@ -264,6 +275,7 @@ type dockerDesktopKeys struct {
 var allowedKeys = map[string][]string{
 	KindDockerDesktop: {"kind", "storage_path", "settings_path", "require_cli_start_support", "fail_if_already_running", "minimum_free_space_gb"},
 	KindApp:           {"kind", "app", "process", "symlink_paths", "fail_if_already_running"},
+	KindPostgres:      {"kind", "data_dir", "bin_dir", "port", "socket_dir", "log_file", "fail_if_already_running"},
 }
 
 func parseTarget(name string, node *yaml.Node, defaultFreeGB int) (Target, error) {
@@ -298,6 +310,8 @@ func parseTarget(name string, node *yaml.Node, defaultFreeGB int) (Target, error
 	switch kind {
 	case KindApp:
 		return parseApp(name, node)
+	case KindPostgres:
+		return parsePostgres(name, node, defaultFreeGB)
 	default:
 		return parseDockerDesktop(name, node, defaultFreeGB)
 	}
@@ -392,6 +406,49 @@ func parseApp(name string, node *yaml.Node) (Target, error) {
 		Kind:                 KindApp,
 		FailIfAlreadyRunning: boolOr(keys.FailIfAlreadyRunning, true),
 		App:                  app,
+	}, nil
+}
+
+type postgresKeys struct {
+	Kind                 string `yaml:"kind"`
+	DataDir              string `yaml:"data_dir"`
+	BinDir               string `yaml:"bin_dir"`
+	Port                 *int   `yaml:"port"`
+	SocketDir            string `yaml:"socket_dir"`
+	LogFile              string `yaml:"log_file"`
+	FailIfAlreadyRunning *bool  `yaml:"fail_if_already_running"`
+}
+
+func parsePostgres(name string, node *yaml.Node, defaultFreeGB int) (Target, error) {
+	var keys postgresKeys
+	if err := node.Decode(&keys); err != nil {
+		return Target{}, err
+	}
+	pg := &Postgres{
+		DataDir:   cleanPath(keys.DataDir),
+		BinDir:    cleanPath(keys.BinDir),
+		SocketDir: cleanPath(keys.SocketDir),
+		LogFile:   cleanPath(keys.LogFile),
+	}
+	if pg.DataDir == "" {
+		return Target{}, errors.New("missing required key \"data_dir\"")
+	}
+	if pg.BinDir == "" {
+		return Target{}, errors.New("missing required key \"bin_dir\": the version-specific install, for example /opt/homebrew/opt/postgresql@17/bin")
+	}
+	if keys.Port != nil {
+		if *keys.Port < 1 || *keys.Port > 65535 {
+			return Target{}, fmt.Errorf("port %d is out of range 1-65535", *keys.Port)
+		}
+		pg.Port = *keys.Port
+	}
+
+	return Target{
+		Name:                 name,
+		Kind:                 KindPostgres,
+		MinimumFreeSpaceGB:   defaultFreeGB,
+		FailIfAlreadyRunning: boolOr(keys.FailIfAlreadyRunning, true),
+		Postgres:             pg,
 	}, nil
 }
 

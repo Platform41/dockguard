@@ -149,8 +149,23 @@ target: {}
 		{"planned kind", `
 drive: /Volumes/X
 targets:
-  db: {kind: postgres, data_dir: /x}
-`, []string{`kind "postgres" is planned for v0.3.0`}},
+  fizzy: {kind: container, up: /x, down: /y}
+`, []string{`kind "container" is planned for v0.4.0`}},
+		{"postgres without bin_dir", `
+drive: /Volumes/X
+targets:
+  db: {kind: postgres, data_dir: /Volumes/X/pgdata/db}
+`, []string{`missing required key "bin_dir"`}},
+		{"postgres without data_dir", `
+drive: /Volumes/X
+targets:
+  db: {kind: postgres, bin_dir: /opt/homebrew/opt/postgresql@17/bin}
+`, []string{`missing required key "data_dir"`}},
+		{"postgres port out of range", `
+drive: /Volumes/X
+targets:
+  db: {kind: postgres, data_dir: /x, bin_dir: /y, port: 70000}
+`, []string{"out of range"}},
 		{"app without app", `
 drive: /Volumes/X
 targets:
@@ -393,5 +408,33 @@ func TestExpandPathKeepsParentTraversal(t *testing.T) {
 	t.Setenv("HOME", home)
 	if got, want := expandPath("~/a/../b"), home+"/a/../b"; got != want {
 		t.Fatalf("expandPath = %q, want %q", got, want)
+	}
+}
+
+func TestLoadReadsPostgresTarget(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg, err := Parse([]byte(`
+drive: /Volumes/ExternalSSD
+minimum_free_space_gb: 20
+targets:
+  myapp-db:
+    kind: postgres
+    data_dir: /Volumes/ExternalSSD/pgdata/myapp
+    bin_dir: /opt/homebrew/opt/postgresql@17/bin
+    port: 55432
+    socket_dir: /tmp
+    log_file: /Volumes/ExternalSSD/pgdata/myapp.log
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := cfg.Targets[0]
+	pg := db.Postgres
+	if db.Kind != KindPostgres || !db.FailIfAlreadyRunning || db.MinimumFreeSpaceGB != 20 {
+		t.Fatalf("target = %#v", db)
+	}
+	if pg.DataDir != "/Volumes/ExternalSSD/pgdata/myapp" || pg.BinDir != "/opt/homebrew/opt/postgresql@17/bin" ||
+		pg.Port != 55432 || pg.SocketDir != "/tmp" || pg.LogFile != "/Volumes/ExternalSSD/pgdata/myapp.log" {
+		t.Fatalf("postgres = %#v", pg)
 	}
 }

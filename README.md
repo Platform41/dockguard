@@ -3,9 +3,8 @@
 DockGuard is a macOS Go CLI that runs preflight checks before starting applications whose data lives
 on an external SSD, and stops them safely before the drive is ejected.
 
-Today it manages Docker Desktop and GUI apps such as Xcode. PostgreSQL clusters and Apple
-`container` stacks follow in v0.3.0 and v0.4.0 (see
-[`docs/specs/multi-target.md`](docs/specs/multi-target.md)).
+Today it manages Docker Desktop, GUI apps such as Xcode, and PostgreSQL clusters. Apple
+`container` stacks follow in v0.4.0 (see [`docs/specs/multi-target.md`](docs/specs/multi-target.md)).
 
 ## Quickstart
 
@@ -122,6 +121,14 @@ targets:
     # process: Xcode                # process name for pgrep; defaults to app
     symlink_paths:                  # internal-disk paths that link onto the drive
       - ~/Library/Developer/Xcode/DerivedData
+
+  myapp-db:
+    kind: postgres
+    data_dir: /Volumes/ExternalSSD/pgdata/myapp
+    bin_dir: /opt/homebrew/opt/postgresql@17/bin   # required: the cluster's own version
+    port: 55432                     # optional
+    socket_dir: /tmp                # optional
+    log_file: /Volumes/ExternalSSD/pgdata/myapp.log  # optional
 ```
 
 Unknown keys and kinds are errors. Target names use lowercase letters, digits and `-`.
@@ -161,6 +168,24 @@ This settings validation is JSON-aware, but it is still based on recognized keys
 it's confirmed running. `~/Library/Developer/CoreSimulator/Devices` (or any folder containing it) is
 rejected: simulator devices break on an external drive.
 
+## PostgreSQL checks
+
+For a cluster run directly with `pg_ctl` (not `brew services`). Each cluster is its own target, so
+any version, or several side by side, is just another entry with its own `bin_dir`, `data_dir` and
+`port`.
+
+- `pg_ctl` and `postgres` exist in `bin_dir`. `bin_dir` is required and never taken from the PATH:
+  Homebrew's `libpq` can put a different major version of `pg_ctl` there.
+- `data_dir` exists, is on the drive, is writable, and has enough free space
+- `PG_VERSION` matches the major version of `<bin_dir>/pg_ctl` (`17`, or `9.6` for pre-10 clusters)
+- no stale `postmaster.pid` (one naming a process that isn't running)
+- with `port`, nothing else is listening on it
+- with `fail_if_already_running` (default on), `check` and `start` fail if the cluster is running
+
+`start` runs `pg_ctl -D <data_dir> [-l log_file] [-o "-p port -k socket_dir"] -w start`. `stop` runs
+`pg_ctl -m fast -w stop`, only once the cluster is confirmed running. DockGuard never edits
+`postgresql.conf`.
+
 ## Common Failures
 
 - Drive not mounted: plug in the SSD; the drive's other checks show `[skip]` until it's mounted.
@@ -179,7 +204,7 @@ dockguard/
 ├── internal/config/       # config loading and validation
 ├── internal/dockerdesktop/  # Docker Desktop CLI
 ├── internal/output/
-├── internal/platform/     # macOS commands (diskutil, open, osascript, pgrep)
+├── internal/platform/     # macOS commands (diskutil, open, osascript, pgrep, pg_ctl)
 ├── internal/target/       # target interface and kinds
 └── examples/
 ```
