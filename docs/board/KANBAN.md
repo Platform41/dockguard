@@ -75,7 +75,7 @@
 - [ ] `[v0.3.0] postgres kind (pg_ctl clusters)`
   **Owner:** Three
   **Priority:** P2
-  **Outcome:** AS-15 to AS-17, AS-23
+  **Outcome:** AS-15 to AS-17, AS-23, AS-25
   **Source docs:** `docs/specs/multi-target.md` §4.3
   **Dependencies:** v0.2.0; proposal P-3 approved
 
