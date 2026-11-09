@@ -52,24 +52,6 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.4.0] stop --all [--eject]`
-  **Owner:** Three
-  **Priority:** P2
-  **Outcome:** AS-19, AS-20, AS-30; AS-29's `stop --all --eject` part
-  **Source docs:** `docs/specs/multi-target.md` §2, §2.3
-  **Dependencies:** container kind
-  **Notes:** Pair with the eject-busy card; both change the eject path.
-  **Branch:** `feat/stop-all`
-
-- [ ] `[v0.4.0] Name the processes holding the drive when eject fails as busy`
-  **Owner:** Three
-  **Priority:** P2
-  **Outcome:** When macOS refuses the eject as busy, the message lists the processes (name and PID) with files open on the drive, instead of only generic advice
-  **Source docs:** `docs/specs/multi-target.md` §2.3
-  **Dependencies:** v0.3.0
-  **Notes:** Found in the v0.3.0 live check: every target was confirmed stopped, but Chrome held one file inside `Xcode.app` on the drive (macOS loads share extensions for the Share menu). One `lsof` call identified it.
-  **Branch:** `feat/stop-all`
-
 ### Blocked
 
 - [ ] `[Phase 4] Validate Docker Desktop CLI behavior on target machine`
@@ -80,6 +62,34 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.4.0] Release: notes, CHANGELOG, live check, tag`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-11-09
+  **Branch:** `chore/release-v0.4.0` (PR #11)
+  **Deliverable:** `docs/releases/v0.4.0.md`, tag `v0.4.0`
+  **Notes:** Live check from the internal disk with the real config. Fizzy's login agent was removed first (D-014). `start` ran for the PostgreSQL cluster, Xcode and Fizzy, and `list` showed all three running. A `stop --all --eject` then stopped everything and ejected: the cluster log shows a fast shutdown at 09:57, Xcode quit, and the container system was down. That run's printed output wasn't captured; a later run with everything stopped printed "already stopped" for each and ejected. `stop --all` with a running cluster was re-checked without eject and printed "stop requested".
+
+- [x] `[v0.4.0] stop --all [--eject]`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** AS-19, AS-20, AS-30; AS-29's `stop --all --eject` part
+  **Source docs:** `docs/specs/multi-target.md` §2, §2.3
+  **Dependencies:** container kind
+  **Notes:** Pair with the eject-busy card; both change the eject path.
+  **Completed:** 2026-11-09
+  **Branch:** `feat/stop-all` (PR #10, merge `776d61d`)
+
+- [x] `[v0.4.0] Name the processes holding the drive when eject fails as busy`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** When macOS refuses the eject as busy, the message lists the processes (name and PID) with files open on the drive, instead of only generic advice
+  **Source docs:** `docs/specs/multi-target.md` §2.3
+  **Dependencies:** v0.3.0
+  **Notes:** Found in the v0.3.0 live check: every target was confirmed stopped, but Chrome held one file inside `Xcode.app` on the drive (macOS loads share extensions for the Share menu). One `lsof` call identified it.
+  **Completed:** 2026-11-09
+  **Branch:** `feat/stop-all` (PR #10, merge `776d61d`)
 
 - [x] `[v0.4.0] container kind (Fizzy)`
   **Owner:** Three
