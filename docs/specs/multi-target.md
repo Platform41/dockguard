@@ -105,14 +105,14 @@ drive (from `lsof`), so the user knows what to quit.
 A live terminal dashboard, opened with `dockguard ui`. Bare `dockguard` still prints usage.
 
 ```
-─────────────────────────── DockGuard · T7SSD ───────────────────────────
- Drive  /Volumes/T7SSD   ● mounted   ▓▓▓▓░░░░░░░░░░  30% used · 685 GB free
+─────────────────────────── DockGuard · ExternalSSD ───────────────────────────
+ Drive  /Volumes/ExternalSSD   ● mounted   ▓▓▓▓░░░░░░░░░░  30% used · 685 GB free
  Eject  ✗ blocked by: xcode (running), fizzy (partial)
 
- ▌● warisan-db   postgres        running   …/pgdata/warisan-review
-  ● xcode        app             running   ~/…/DerivedData → T7
-  ◐ fizzy        container       partial   /Volumes/T7SSD/container-data
-  ○ docker       docker-desktop  stopped   …/docker-data/DockerDesktop
+ ▌● myapp-db  postgres        running   …/pgdata/myapp
+  ● xcode     app             running   ~/…/DerivedData → drive
+  ◐ fizzy     container       partial   /Volumes/ExternalSSD/container-data
+  ○ docker    docker-desktop  stopped   …/docker-data/DockerDesktop
 
  ↑/k ↓/j move · s start · x stop · c check · E stop all + eject · r refresh · q quit
 ```

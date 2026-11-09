@@ -319,8 +319,12 @@ func (m Model) View() string {
 	// Drive.
 	if m.snap.Mounted {
 		bar := usageBar(m.snap.UsedPct, 14)
-		b.WriteString(fmt.Sprintf(" %s  %s   %s mounted   %s  %.0f%% used · %d GB free\n",
-			title.Render("Drive"), m.snap.Drive, good.Render("●"), bar, m.snap.UsedPct, m.snap.FreeGB))
+		usage := fmt.Sprintf("%.0f%% used · %d GB free", m.snap.UsedPct, m.snap.FreeGB)
+		b.WriteString(fit(width,
+			fmt.Sprintf(" %s  %s   %s mounted   %s  %s", title.Render("Drive"), m.snap.Drive, good.Render("●"), bar, usage),
+			fmt.Sprintf(" %s  %s   %s mounted   %s", title.Render("Drive"), m.snap.Drive, good.Render("●"), usage),
+			fmt.Sprintf(" %s  %s  %s %s", title.Render("Drive"), m.snap.Drive, good.Render("●"), usage),
+		) + "\n")
 	} else {
 		b.WriteString(fmt.Sprintf(" %s  %s   %s\n", title.Render("Drive"), m.snap.Drive, bad.Render("○ not mounted")))
 	}
@@ -383,11 +387,29 @@ func (m Model) View() string {
 		if m.confirming.action == StopAllEject {
 			what = "Stop every target and eject " + m.snap.Drive
 		}
-		b.WriteString(" " + confirm.Render(what+"?") + " " + dim.Render("y = yes · any other key = cancel") + "\n")
+		short := "Stop " + m.confirming.target + "?"
+		if m.confirming.action == StopAllEject {
+			short = "Stop every target and eject the drive?"
+		}
+		b.WriteString(fit(width,
+			" "+confirm.Render(what+"?")+" "+dim.Render("y = yes · any other key = cancel"),
+			" "+confirm.Render(what+"?")+" "+dim.Render("y / any key = cancel"),
+			" "+confirm.Render(short)+" "+dim.Render("y / any key = cancel"),
+		) + "\n")
 	} else {
 		b.WriteString(" " + dim.Render(footer(width-2)) + "\n")
 	}
 	return b.String()
+}
+
+// fit returns the first line that fits the width, or the last one when none does.
+func fit(width int, lines ...string) string {
+	for _, l := range lines {
+		if lipgloss.Width(l) <= width {
+			return l
+		}
+	}
+	return lines[len(lines)-1]
 }
 
 // footer fits the key help to the terminal width, dropping the least important keys first.

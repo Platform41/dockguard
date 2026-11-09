@@ -32,8 +32,8 @@ func (f *fakeCtl) Run(a Action, t string) (bool, string) {
 }
 
 func snapshot(states ...target.State) Snapshot {
-	names := []string{"docker", "xcode", "warisan-db", "fizzy"}
-	s := Snapshot{Drive: "/Volumes/T7SSD", Mounted: true, UsedPct: 30, FreeGB: 685, TotalGB: 1000}
+	names := []string{"docker", "xcode", "myapp-db", "fizzy"}
+	s := Snapshot{Drive: "/Volumes/ExternalSSD", Mounted: true, UsedPct: 30, FreeGB: 685, TotalGB: 1000}
 	for i, st := range states {
 		s.Rows = append(s.Rows, Row{Name: names[i], Kind: "kind", Path: "/p/" + names[i], State: st})
 	}
@@ -69,8 +69,8 @@ func press(m Model, keys ...string) (Model, tea.Cmd) {
 func TestViewShowsDriveEjectLineAndTargets(t *testing.T) {
 	f := &fakeCtl{snap: snapshot(target.Stopped, target.Running, target.Running, target.Partial)}
 	view := loaded(f).View()
-	for _, want := range []string{"DockGuard · T7SSD", "/Volumes/T7SSD", "mounted", "685 GB free",
-		"docker", "xcode", "warisan-db", "fizzy", "running", "partial", "stopped"} {
+	for _, want := range []string{"DockGuard · ExternalSSD", "/Volumes/ExternalSSD", "mounted", "685 GB free",
+		"docker", "xcode", "myapp-db", "fizzy", "running", "partial", "stopped"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q:\n%s", want, view)
 		}
@@ -92,7 +92,7 @@ func TestEjectLine(t *testing.T) {
 		t.Fatalf("blocked:\n%s", blocked)
 	}
 
-	unmounted := &fakeCtl{snap: Snapshot{Drive: "/Volumes/T7SSD", Rows: []Row{{Name: "docker", Kind: "k"}}}}
+	unmounted := &fakeCtl{snap: Snapshot{Drive: "/Volumes/ExternalSSD", Rows: []Row{{Name: "docker", Kind: "k"}}}}
 	if v := loaded(unmounted).View(); !strings.Contains(v, "not mounted") || !strings.Contains(v, "nothing to eject") {
 		t.Fatalf("unmounted:\n%s", v)
 	}
@@ -121,7 +121,7 @@ func TestStopAndEjectNeedConfirmation(t *testing.T) {
 	}
 
 	m, _ = press(m, "E")
-	if !strings.Contains(m.View(), "Stop every target and eject /Volumes/T7SSD?") {
+	if !strings.Contains(m.View(), "Stop every target and eject /Volumes/ExternalSSD?") {
 		t.Fatalf("E should ask first:\n%s", m.View())
 	}
 	m, cmd = press(m, "y")
@@ -143,7 +143,7 @@ func TestStartAndCheckRunOnTheSelectedTarget(t *testing.T) {
 	m.busy = false
 	_, cmd = press(m, "c")
 	cmd()
-	want := []call{{Start, "warisan-db"}, {Check, "warisan-db"}}
+	want := []call{{Start, "myapp-db"}, {Check, "myapp-db"}}
 	if len(f.calls) != 2 || f.calls[0] != want[0] || f.calls[1] != want[1] {
 		t.Fatalf("calls = %v", f.calls)
 	}
@@ -152,12 +152,12 @@ func TestStartAndCheckRunOnTheSelectedTarget(t *testing.T) {
 // AS-34: a refused eject shows why, as the CLI would.
 func TestRefusedEjectIsShown(t *testing.T) {
 	f := &fakeCtl{snap: snapshot(target.Running), ok: false,
-		output: "Not ejecting /Volumes/T7SSD: these targets aren't confirmed stopped:\n- xcode: running\ndrive not ejected\n"}
+		output: "Not ejecting /Volumes/ExternalSSD: these targets aren't confirmed stopped:\n- xcode: running\ndrive not ejected\n"}
 	m := loaded(f)
 	m, cmd := press(m, "E", "y")
 	next, _ := m.Update(cmd())
 	view := next.(Model).View()
-	for _, want := range []string{"✗", "stop --all --eject", "Not ejecting /Volumes/T7SSD", "- xcode: running"} {
+	for _, want := range []string{"✗", "stop --all --eject", "Not ejecting /Volumes/ExternalSSD", "- xcode: running"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q:\n%s", want, view)
 		}
@@ -232,7 +232,7 @@ func TestQuit(t *testing.T) {
 
 func TestRowsStayInsideTheTerminalWidth(t *testing.T) {
 	f := &fakeCtl{snap: snapshot(target.Stopped, target.Running)}
-	f.snap.Rows[0].Path = "/Volumes/T7SSD/a/very/long/path/that/would/never/fit/in/eighty/columns/DockerDesktop"
+	f.snap.Rows[0].Path = "/Volumes/ExternalSSD/a/very/long/path/that/would/never/fit/in/eighty/columns/DockerDesktop"
 	m := loaded(f)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	for _, line := range strings.Split(next.(Model).View(), "\n") {
@@ -275,7 +275,7 @@ func TestKeyBurstIsHandledKeyByKey(t *testing.T) {
 		t.Fatalf("selected = %d, want 2", next.(Model).selected)
 	}
 	runAll(cmd)
-	if len(f.calls) != 1 || f.calls[0] != (call{Check, "warisan-db"}) {
+	if len(f.calls) != 1 || f.calls[0] != (call{Check, "myapp-db"}) {
 		t.Fatalf("calls = %v", f.calls)
 	}
 }
