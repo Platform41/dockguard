@@ -3,8 +3,8 @@
 DockGuard is a macOS Go CLI that runs preflight checks before starting applications whose data lives
 on an external SSD, and stops them safely before the drive is ejected.
 
-Today it manages Docker Desktop, GUI apps such as Xcode, and PostgreSQL clusters. Apple
-`container` stacks follow in v0.4.0 (see [`docs/specs/multi-target.md`](docs/specs/multi-target.md)).
+It manages Docker Desktop, GUI apps such as Xcode, PostgreSQL clusters and Apple `container`
+stacks (see [`docs/specs/multi-target.md`](docs/specs/multi-target.md)).
 
 ## Quickstart
 
@@ -129,6 +129,14 @@ targets:
     port: 55432                     # optional
     socket_dir: /tmp                # optional
     log_file: /Volumes/ExternalSSD/pgdata/myapp.log  # optional; defaults to <data_dir>.log
+
+  myapp-stack:
+    kind: container
+    up: ~/bin/myapp-up.sh           # your scripts start and stop the stack
+    down: ~/bin/myapp-down.sh
+    containers: [myapp-db, myapp-web]
+    data_path: /Volumes/ExternalSSD/container-data   # optional
+    stop_system: true               # optional: also stop Apple container's system service
 ```
 
 Unknown keys and kinds are errors. Target names use lowercase letters, digits and `-`. Paths must
@@ -188,6 +196,25 @@ log goes to `log_file`, or `<data_dir>.log` when it isn't set. `stop` runs
 `pg_ctl -m fast -w stop`, only once the cluster is confirmed running. DockGuard never edits
 `postgresql.conf`.
 
+## Container checks
+
+For an Apple `container` stack started and stopped by your own `up` and `down` scripts.
+
+- `up` and `down` exist and are executable; the `container` CLI is on the PATH
+- `data_path`, if set, exists and is on the drive
+- Apple container's data folder (`~/Library/Application Support/com.apple.container`) resolves to
+  the drive
+- with `fail_if_already_running` (default on), `check` and `start` fail if any of the stack's
+  containers is running
+
+State comes from `container list`: `running` if all of `containers` run, `partial` if some do,
+`stopped` if none do. When the container system itself isn't running, the stack is `stopped`.
+
+Apple container's system service keeps files open on the drive even after a stack stops. With
+`stop_system: true`, `stop` also runs `container system stop`, and a system still running counts as
+`partial`, so it blocks the eject. Because stopping the system stops every container, DockGuard
+refuses (and names them) while containers outside the stack are running.
+
 ## Common Failures
 
 - Drive not mounted: plug in the SSD; the drive's other checks show `[skip]` until it's mounted.
@@ -206,7 +233,7 @@ dockguard/
 ├── internal/config/       # config loading and validation
 ├── internal/dockerdesktop/  # Docker Desktop CLI
 ├── internal/output/
-├── internal/platform/     # macOS commands (diskutil, open, osascript, pgrep, pg_ctl)
+├── internal/platform/     # macOS commands (diskutil, open, osascript, pgrep, pg_ctl, container)
 ├── internal/target/       # target interface and kinds
 └── examples/
 ```

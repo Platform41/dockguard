@@ -13,6 +13,7 @@ import (
 	"github.com/platform41/dockguard/internal/platform"
 	"github.com/platform41/dockguard/internal/target"
 	appkind "github.com/platform41/dockguard/internal/target/app"
+	containerkind "github.com/platform41/dockguard/internal/target/container"
 	"github.com/platform41/dockguard/internal/target/dockerdesktop"
 	"github.com/platform41/dockguard/internal/target/postgres"
 )
@@ -150,6 +151,8 @@ func defaultBuildTargets(cfg config.Config) ([]entry, error) {
 			entries = append(entries, entry{t: appkind.New(t, cfg.Drive), cfg: t})
 		case config.KindPostgres:
 			entries = append(entries, entry{t: postgres.New(t, cfg.Drive), cfg: t})
+		case config.KindContainer:
+			entries = append(entries, entry{t: containerkind.New(t, cfg.Drive), cfg: t})
 		default:
 			return nil, fmt.Errorf("target %q: kind %q is not supported", t.Name, t.Kind)
 		}
@@ -192,6 +195,11 @@ func preflight(cfg config.Config, e entry, withGuard bool) []checks.Item {
 	return items
 }
 
+// guardStater is implemented by targets whose already-running guard differs from State.
+type guardStater interface {
+	GuardState() (target.State, error)
+}
+
 // guard is C8.
 func guard(e entry) checks.Item {
 	name := e.t.Name() + " not already running"
@@ -199,7 +207,13 @@ func guard(e entry) checks.Item {
 		name = "docker desktop not already running"
 	}
 
-	state, err := e.t.State()
+	// A target can narrow what "already running" means (a container stack looks at its own
+	// containers, not the shared container system).
+	probe := e.t.State
+	if g, ok := e.t.(guardStater); ok {
+		probe = g.GuardState
+	}
+	state, err := probe()
 	switch state {
 	case target.Stopped:
 		return checks.Item{Name: name, OK: true, Message: "not running"}

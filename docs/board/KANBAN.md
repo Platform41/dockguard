@@ -44,6 +44,14 @@
 
 ### Backlog
 
+- [ ] `[v0.4.0] stop --all [--eject]`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** AS-19, AS-20, AS-30; AS-29's `stop --all --eject` part
+  **Source docs:** `docs/specs/multi-target.md` §2, §2.3
+  **Dependencies:** container kind
+  **Notes:** Pair with the eject-busy card; both change the eject path.
+
 - [ ] `[v0.4.0] Name the processes holding the drive when eject fails as busy`
   **Owner:** Three
   **Priority:** P2
@@ -52,13 +60,6 @@
   **Dependencies:** v0.3.0
   **Notes:** Found in the v0.3.0 live check: every target was confirmed stopped, but Chrome held one file inside `Xcode.app` on the drive (macOS loads share extensions for the Share menu). One `lsof` call identified it.
 
-- [ ] `[v0.4.0] container kind (Fizzy) and stop --all --eject`
-  **Owner:** Three
-  **Priority:** P3
-  **Outcome:** AS-18 to AS-20, AS-24, AS-29, AS-30
-  **Source docs:** `docs/specs/multi-target.md` §4.4
-  **Dependencies:** v0.3.0. Includes removing Fizzy's launchd agent (D-014, AS-24)
-
 ### This Week
 
 ### Doing
@@ -66,6 +67,13 @@
 _None._
 
 ### Review/Test
+
+- [ ] `[v0.4.0] container kind (Fizzy)`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** AS-18 (running stack listed), AS-29 (partial stack); D-017 (`stop_system`)
+  **Source docs:** `docs/specs/multi-target.md` §4.4
+  **Branch:** `feat/container-kind`
 
 ### Blocked
 
@@ -285,6 +293,7 @@ _None._
 | D-014 | 2026-11-08 | Remove Fizzy's start-at-login launchd agent; Fizzy starts through `dockguard start fizzy` | Azrad | Fizzy no longer starts while the drive is missing. Done with v0.4.0 |
 | D-015 | 2026-11-08 | The config file is the record of which apps DockGuard manages; also look it up at `~/.config/dockguard/dockguard.yaml`, and `list`/`status` print the file used | Azrad | Lands in v0.2.0 |
 | D-016 | 2026-11-08 | Amends D-007: the `brew-service` kind is replaced by a `postgres` kind that runs clusters with `pg_ctl` from a required, version-specific `bin_dir` | Azrad | Was proposal P-3. PostgreSQL here runs with `pg_ctl`, not `brew services`; the `pg_ctl` on the PATH (libpq, v18) differs from the cluster (v17) |
+| D-017 | 2026-11-09 | The `container` kind gets an optional `stop_system` key: stop also runs `container system stop` (refusing while containers outside the stack run), and a running system makes a stopped stack `partial` so it blocks eject. A stopped system means the stack is `stopped` | Azrad | Found while building v0.4.0: `fizzy-down.sh` stops the containers but the container system keeps files open on the drive, and `container list` fails once the system is stopped |
 
 ---
 

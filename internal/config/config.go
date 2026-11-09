@@ -34,9 +34,7 @@ const (
 )
 
 // plannedKinds are in the spec but not built yet.
-var plannedKinds = map[string]string{
-	KindContainer: "v0.4.0",
-}
+var plannedKinds = map[string]string{}
 
 var targetNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
@@ -63,6 +61,7 @@ type Target struct {
 	DockerDesktop        *DockerDesktop
 	App                  *App
 	Postgres             *Postgres
+	Container            *Container
 }
 
 // DockerDesktop holds the keys of a docker-desktop target.
@@ -91,6 +90,15 @@ type Postgres struct {
 	Port      int
 	SocketDir string
 	LogFile   string
+}
+
+// Container holds the keys of a container target: an Apple container stack (D-017).
+type Container struct {
+	Up, Down   string
+	Containers []string
+	DataPath   string
+	// StopSystem also stops Apple container's system service on stop.
+	StopSystem bool
 }
 
 // Find returns the target with the given name.
@@ -279,6 +287,7 @@ var allowedKeys = map[string][]string{
 	KindDockerDesktop: {"kind", "storage_path", "settings_path", "require_cli_start_support", "fail_if_already_running", "minimum_free_space_gb"},
 	KindApp:           {"kind", "app", "process", "symlink_paths", "fail_if_already_running"},
 	KindPostgres:      {"kind", "data_dir", "bin_dir", "port", "socket_dir", "log_file", "fail_if_already_running"},
+	KindContainer:     {"kind", "up", "down", "containers", "data_path", "stop_system", "fail_if_already_running"},
 }
 
 func parseTarget(name string, node *yaml.Node, defaultFreeGB int) (Target, error) {
@@ -315,6 +324,8 @@ func parseTarget(name string, node *yaml.Node, defaultFreeGB int) (Target, error
 		return parseApp(name, node)
 	case KindPostgres:
 		return parsePostgres(name, node, defaultFreeGB)
+	case KindContainer:
+		return parseContainer(name, node)
 	default:
 		return parseDockerDesktop(name, node, defaultFreeGB)
 	}
@@ -472,6 +483,61 @@ func parsePostgres(name string, node *yaml.Node, defaultFreeGB int) (Target, err
 		MinimumFreeSpaceGB:   defaultFreeGB,
 		FailIfAlreadyRunning: boolOr(keys.FailIfAlreadyRunning, true),
 		Postgres:             pg,
+	}, nil
+}
+
+type containerKeys struct {
+	Kind                 string   `yaml:"kind"`
+	Up                   string   `yaml:"up"`
+	Down                 string   `yaml:"down"`
+	Containers           []string `yaml:"containers"`
+	DataPath             string   `yaml:"data_path"`
+	StopSystem           *bool    `yaml:"stop_system"`
+	FailIfAlreadyRunning *bool    `yaml:"fail_if_already_running"`
+}
+
+func parseContainer(name string, node *yaml.Node) (Target, error) {
+	var keys containerKeys
+	if err := node.Decode(&keys); err != nil {
+		return Target{}, err
+	}
+	c := &Container{
+		Up:         cleanPath(keys.Up),
+		Down:       cleanPath(keys.Down),
+		DataPath:   cleanPath(keys.DataPath),
+		StopSystem: boolOr(keys.StopSystem, false),
+	}
+	for _, field := range []struct{ key, value string }{{"up", c.Up}, {"down", c.Down}} {
+		if field.value == "" {
+			return Target{}, fmt.Errorf("missing required key %q", field.key)
+		}
+	}
+	for _, field := range []struct{ key, value string }{{"up", c.Up}, {"down", c.Down}, {"data_path", c.DataPath}} {
+		if err := requireAbsolute(field.key, field.value); err != nil {
+			return Target{}, err
+		}
+	}
+	seen := map[string]bool{}
+	for _, raw := range keys.Containers {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			return Target{}, errors.New("containers has an empty entry")
+		}
+		if seen[id] {
+			return Target{}, fmt.Errorf("containers lists %q twice", id)
+		}
+		seen[id] = true
+		c.Containers = append(c.Containers, id)
+	}
+	if len(c.Containers) == 0 {
+		return Target{}, errors.New("missing required key \"containers\": the stack's container names")
+	}
+
+	return Target{
+		Name:                 name,
+		Kind:                 KindContainer,
+		FailIfAlreadyRunning: boolOr(keys.FailIfAlreadyRunning, true),
+		Container:            c,
 	}, nil
 }
 

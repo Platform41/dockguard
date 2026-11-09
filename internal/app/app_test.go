@@ -388,3 +388,26 @@ func TestStartRefusesWhenDriveIsUnmounted(t *testing.T) {
 		t.Fatalf("Run = %d, %v; started = %v\n%s", code, err, f.started, h.out)
 	}
 }
+
+// guarded is a fake whose already-running guard looks at something narrower than State.
+type guarded struct {
+	*fake
+	guardState target.State
+}
+
+func (g *guarded) GuardState() (target.State, error) { return g.guardState, nil }
+
+// D-017: a container system kept up by something else makes the stack partial for eject, but
+// doesn't block start.
+func TestStartUsesGuardState(t *testing.T) {
+	f := &fake{name: "fizzy", states: states(target.Partial), checksOK: true}
+	g := &guarded{fake: f, guardState: target.Stopped}
+	setup(t, true, false, f)
+	buildTargets = func(cfg config.Config) ([]entry, error) {
+		return []entry{{t: g, cfg: cfg.Targets[0]}}, nil
+	}
+
+	if code, err := Run([]string{"start", "fizzy"}); code != 0 || err != nil || !f.started {
+		t.Fatalf("Run = %d, %v; started = %v", code, err, f.started)
+	}
+}

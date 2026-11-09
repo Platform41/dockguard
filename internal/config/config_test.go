@@ -146,11 +146,26 @@ targets:
 drive: /Volumes/X
 target: {}
 `, []string{`unknown key "target"`}},
-		{"planned kind", `
+		{"container without containers", `
 drive: /Volumes/X
 targets:
-  fizzy: {kind: container, up: /x, down: /y}
-`, []string{`kind "container" is planned for v0.4.0`}},
+  fizzy: {kind: container, up: /x/up.sh, down: /x/down.sh}
+`, []string{`missing required key "containers"`}},
+		{"container without down", `
+drive: /Volumes/X
+targets:
+  fizzy: {kind: container, up: /x/up.sh, containers: [db]}
+`, []string{`missing required key "down"`}},
+		{"container listed twice", `
+drive: /Volumes/X
+targets:
+  fizzy: {kind: container, up: /x/up.sh, down: /x/down.sh, containers: [db, db]}
+`, []string{`lists "db" twice`}},
+		{"container relative script", `
+drive: /Volumes/X
+targets:
+  fizzy: {kind: container, up: up.sh, down: /x/down.sh, containers: [db]}
+`, []string{"absolute path"}},
 		{"postgres without bin_dir", `
 drive: /Volumes/X
 targets:
@@ -471,5 +486,31 @@ func TestPostgresLogFileDefaultsNextToDataDir(t *testing.T) {
 	}
 	if got := cfg.Targets[0].Postgres.LogFile; got != "/Volumes/X/pgdata/db.log" {
 		t.Fatalf("LogFile = %q", got)
+	}
+}
+
+func TestLoadReadsContainerTarget(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfg, err := Parse([]byte(`
+drive: /Volumes/ExternalSSD
+targets:
+  fizzy:
+    kind: container
+    up: ~/.config/fizzy/fizzy-up.sh
+    down: ~/.config/fizzy/fizzy-down.sh
+    containers: [fizzy-db, fizzy-app]
+    data_path: /Volumes/ExternalSSD/container-data
+    stop_system: true
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := cfg.Targets[0].Container
+	if c.Up != home+"/.config/fizzy/fizzy-up.sh" || len(c.Containers) != 2 || !c.StopSystem || c.DataPath != "/Volumes/ExternalSSD/container-data" {
+		t.Fatalf("container = %#v", c)
+	}
+	if !cfg.Targets[0].FailIfAlreadyRunning {
+		t.Fatal("fail_if_already_running should default to true")
 	}
 }

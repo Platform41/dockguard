@@ -4,7 +4,7 @@
 **Last Updated:** 2026-11-08
 **Owner:** One
 **Builder:** Three
-**Decisions:** D-005 to D-016 in the [board's decision log](../board/KANBAN.md#decision-log).
+**Decisions:** D-005 to D-017 in the [board's decision log](../board/KANBAN.md#decision-log).
 
 DockGuard runs preflight checks before starting Docker Desktop when Docker's storage is on an
 external SSD. This spec extends the same protection to any application whose data lives on that
@@ -232,11 +232,19 @@ can follow the same pattern if one is ever needed; Fizzy's MySQL is a container 
 | | |
 | --- | --- |
 | Required keys | `up`, `down`, `containers` |
-| Optional keys | `data_path`, `fail_if_already_running` (default true) |
+| Optional keys | `data_path`, `stop_system` (default false, D-017), `fail_if_already_running` (default true) |
 | Checks | `up` and `down` exist and are executable; `container` is on the PATH; `data_path` exists on the drive; Apple container's data folder (`~/Library/Application Support/com.apple.container`) resolves to the drive |
 | Start | Runs `up` |
-| Stop | Runs `down`, also when the stack is `partial` |
-| State | From `container list`: `running` if every name in `containers` is running, `stopped` if none is, `partial` if only some are, `unknown` if the list can't be read |
+| Stop | Runs `down` when any of the stack's containers is running, also when the stack is `partial`. With `stop_system`, then runs `container system stop`, but refuses (and names them) while any container outside the stack is running, because stopping the system stops every container. |
+| State | If `container system status` says the system isn't running, no container can be: `stopped`. Otherwise from `container list --all --format json`: `running` if every name in `containers` is running, `stopped` if none is, `partial` if only some are. A container whose state isn't `stopped` counts as running; one that doesn't exist counts as stopped. With `stop_system`, a stopped stack whose system is still running is `partial`, because the system keeps files open on the drive. `unknown` if the status or list can't be read. |
+
+The already-running guard looks at the stack's own containers only, so a container system started for
+something else doesn't block `start`.
+
+**Container system (D-017):** Apple container's system service keeps files open in its data folder on
+the drive even after a stack's containers stop. `stop_system: true` lets DockGuard stop it, and makes
+a still-running system block the eject rule. It's off by default, because the system is shared by
+every container on the machine.
 
 **Fizzy at login (D-014):** the launchd agent that runs `fizzy-up.sh` at
 login is removed. Fizzy starts with `dockguard start fizzy` instead, so it never
