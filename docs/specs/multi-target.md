@@ -130,6 +130,9 @@ A live terminal dashboard, opened with `dockguard ui`. Bare `dockguard` still pr
 - Checks only run on `c` or before a start, not on every refresh: the writable check creates a
   temporary file.
 - If standard input or output isn't a terminal, `ui` exits 1 and points to `list` and `status`.
+- Targets are probed in parallel, so one slow probe doesn't hold up the others.
+- A burst of keys (typed fast or pasted) is handled one key at a time, but stops at a confirmation
+  prompt: a confirmation is always its own key press.
 
 ## 3. Config
 
@@ -215,7 +218,7 @@ Every kind uses the shared checks in §5 and adds its own.
 | Checks | Storage path exists and is writable; free space; settings file exists and points at `storage_path`; not already running (guard) |
 | Start | `docker desktop start` (needs Docker Desktop 4.37+) |
 | Stop | `docker desktop stop` |
-| Running | `docker desktop status` |
+| Running | `docker desktop status`. When no Docker Desktop process exists (`pgrep -f 'Docker\.app/Contents/'` exits 1), Docker is confirmed stopped without the CLI, which waits about 16 seconds before saying Desktop isn't running. Any Desktop process, or a failed process check, falls through to the CLI. |
 
 ### 4.2 `app` (v0.3.0)
 

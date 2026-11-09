@@ -4,13 +4,37 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/platform41/dockguard/internal/platform"
 )
 
 var (
-	lookPath  = exec.LookPath
-	runCmd    = runCommand
-	runStatus = runStatusCommand
+	lookPath         = exec.LookPath
+	runCmd           = runCommand
+	runStatus        = runStatusCommand
+	desktopProcesses = anyDesktopProcess
 )
+
+// desktopProcessPattern matches any process running from inside Docker Desktop's app bundle, such
+// as "Docker Desktop" or com.docker.backend, wherever the app is installed. The docker CLI and its
+// plugins live outside the bundle and don't match.
+const desktopProcessPattern = `Docker\.app/Contents/`
+
+// anyDesktopProcess reports whether any Docker Desktop process is running. pgrep exits 0 when it
+// finds one and 1 when it finds none; anything else is an error.
+func anyDesktopProcess() (bool, error) {
+	_, code, err := platform.Run("pgrep", "-f", desktopProcessPattern)
+	switch {
+	case err != nil:
+		return false, err
+	case code == 0:
+		return true, nil
+	case code == 1:
+		return false, nil
+	default:
+		return false, fmt.Errorf("pgrep exited %d", code)
+	}
+}
 
 // StartOptions controls how Start behaves.
 type StartOptions struct {
@@ -66,7 +90,16 @@ func Stop() (bool, error) {
 	return true, nil
 }
 
+// IsRunning reports whether Docker Desktop is running.
+//
+// When no Docker Desktop process exists, it's confirmed stopped without asking the CLI:
+// `docker desktop status` waits about 16 seconds before reporting that Desktop isn't running. Any
+// Desktop process, or a failed process check, falls through to the CLI, which stays the authority.
 func IsRunning() (bool, error) {
+	if found, err := desktopProcesses(); err == nil && !found {
+		return false, nil
+	}
+
 	if _, err := lookPath("docker"); err != nil {
 		return false, fmt.Errorf("docker CLI not found in PATH: %w", err)
 	}

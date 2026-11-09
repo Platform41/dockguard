@@ -2,10 +2,46 @@ package dockerdesktop
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
 )
+
+// TestMain makes the process check report a running Desktop by default, so these tests exercise
+// the CLI path whatever is running on the test machine.
+func TestMain(m *testing.M) {
+	desktopProcesses = func() (bool, error) { return true, nil }
+	os.Exit(m.Run())
+}
+
+func TestIsRunningSkipsTheCLIWhenNoDesktopProcessExists(t *testing.T) {
+	origProc, origStatus, origLook := desktopProcesses, runStatus, lookPath
+	t.Cleanup(func() { desktopProcesses, runStatus, lookPath = origProc, origStatus, origLook })
+	desktopProcesses = func() (bool, error) { return false, nil }
+	runStatus = func(string, ...string) (string, error) {
+		t.Fatal("docker desktop status ran although no Desktop process exists")
+		return "", nil
+	}
+
+	running, err := IsRunning()
+	if running || err != nil {
+		t.Fatalf("IsRunning() = %v, %v; want stopped", running, err)
+	}
+}
+
+func TestIsRunningAsksTheCLIWhenTheProcessCheckFails(t *testing.T) {
+	origProc, origStatus, origLook := desktopProcesses, runStatus, lookPath
+	t.Cleanup(func() { desktopProcesses, runStatus, lookPath = origProc, origStatus, origLook })
+	desktopProcesses = func() (bool, error) { return false, errors.New("pgrep: exit 3") }
+	lookPath = func(file string) (string, error) { return "/usr/local/bin/" + file, nil }
+	asked := false
+	runStatus = func(string, ...string) (string, error) { asked = true; return "Name Value\nStatus running\n", nil }
+
+	if running, err := IsRunning(); !running || err != nil || !asked {
+		t.Fatalf("IsRunning() = %v, %v; asked CLI = %v", running, err, asked)
+	}
+}
 
 func TestStartRunsDockerDesktopStart(t *testing.T) {
 	originalLookPath := lookPath

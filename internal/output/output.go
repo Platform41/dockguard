@@ -24,6 +24,7 @@ func PrintUsage() {
 	fmt.Fprintln(Out, "DockGuard")
 	fmt.Fprintln(Out, "")
 	fmt.Fprintln(Out, "Usage:")
+	fmt.Fprintln(Out, "  dockguard ui [--config path]           live dashboard")
 	fmt.Fprintln(Out, "  dockguard list [--config path]")
 	fmt.Fprintln(Out, "  dockguard status [--config path]")
 	fmt.Fprintln(Out, "  dockguard check [target] [--config path]")

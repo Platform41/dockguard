@@ -12,6 +12,7 @@ import (
 	"github.com/platform41/dockguard/internal/config"
 	"github.com/platform41/dockguard/internal/output"
 	"github.com/platform41/dockguard/internal/target"
+	"github.com/platform41/dockguard/internal/ui"
 )
 
 // fake is a target whose probe answers come from a list; the last answer repeats.
@@ -608,5 +609,55 @@ func TestStopAllKeepsSystemWhileUnmanagedContainersRun(t *testing.T) {
 	}
 	if !strings.Contains(h.out.String(), "buildkit") {
 		t.Fatalf("output should name the unmanaged container:\n%s", h.out)
+	}
+}
+
+// AS-35: without a terminal, ui exits 1 and points to list and status.
+func TestUIRefusesWithoutATerminal(t *testing.T) {
+	setup(t, true, false, &fake{name: "docker", states: states(target.Stopped)})
+	orig := isTerminal
+	t.Cleanup(func() { isTerminal = orig })
+	isTerminal = func() bool { return false }
+
+	code, err := Run([]string{"ui"})
+	if code != 1 || err == nil || !strings.Contains(err.Error(), "dockguard list") {
+		t.Fatalf("Run = %d, %v", code, err)
+	}
+}
+
+func TestUIOpensTheDashboardWithAController(t *testing.T) {
+	setup(t, true, false, &fake{name: "docker", states: states(target.Running)})
+	origTerm, origUI := isTerminal, runUI
+	t.Cleanup(func() { isTerminal, runUI = origTerm, origUI })
+	isTerminal = func() bool { return true }
+
+	var got ui.Snapshot
+	runUI = func(ctl ui.Controller) error { got = ctl.Snapshot(); return nil }
+	if code, err := Run([]string{"ui"}); code != 0 || err != nil {
+		t.Fatalf("Run = %d, %v", code, err)
+	}
+	if !got.Mounted || len(got.Rows) != 1 || got.Rows[0].State != target.Running {
+		t.Fatalf("snapshot = %#v", got)
+	}
+}
+
+// The dashboard's actions are the CLI's: output is captured, and the eject rule still applies.
+func TestControllerRunsTheCLIPaths(t *testing.T) {
+	docker := &fake{name: "docker", states: states(target.Running), checksOK: true}
+	h := setup(t, true, false, docker)
+	cfg, _ := loadConfig("")
+	entries, _ := buildTargets(cfg)
+	c := &controller{cfg: cfg, entries: entries}
+
+	ok, out := c.Run(ui.Check, "docker")
+	if ok || !strings.Contains(out, "docker desktop not already running") && !strings.Contains(out, "docker not already running") {
+		t.Fatalf("check = %v, %q", ok, out)
+	}
+	ok, out = c.Run(ui.StopAllEject, "")
+	if ok || h.ejected || !strings.Contains(out, "Not ejecting") {
+		t.Fatalf("stop all + eject = %v, %q; ejected %v", ok, out, h.ejected)
+	}
+	if h.out.Len() != 0 {
+		t.Fatalf("controller output leaked to stdout: %q", h.out.String())
 	}
 }

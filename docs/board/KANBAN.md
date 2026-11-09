@@ -48,14 +48,16 @@
 
 ### Doing
 
+_None._
+
+### Review/Test
+
 - [ ] `[v0.5.0] Terminal dashboard: dockguard ui`
   **Owner:** Three
   **Priority:** P2
   **Outcome:** AS-31 to AS-35
   **Source docs:** `docs/specs/multi-target.md` §2.4, D-018
   **Branch:** `feat/dashboard`
-
-### Review/Test
 
 ### Blocked
 
