@@ -490,10 +490,42 @@ func usageBar(pct float64, width int) string {
 
 func lastLines(s string, n int) string {
 	lines := strings.Split(s, "\n")
+	earlier := 0
 	if len(lines) > n {
-		lines = append([]string{dim.Render(fmt.Sprintf("… %d earlier lines", len(lines)-n))}, lines[len(lines)-n:]...)
+		earlier, lines = len(lines)-n, lines[len(lines)-n:]
+	}
+	for i, l := range lines {
+		lines[i] = colorLine(l)
+	}
+	if earlier > 0 {
+		lines = append([]string{dim.Render(fmt.Sprintf("… %d earlier lines", earlier))}, lines...)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// failurePhrases mark output lines that report something going wrong.
+var failurePhrases = []string{
+	"failed", "Not ejecting", "not ejected", "refusing", "volume is busy", "still using the drive",
+}
+
+// colorLine colours one line of command output. The commands print plain text when captured, so
+// the dashboard adds colour here: result markers by outcome, and failure lines in red.
+func colorLine(line string) string {
+	for marker, style := range map[string]lipgloss.Style{"[ok]": good, "[fail]": bad, "[skip]": warn} {
+		if i := strings.Index(line, marker); i >= 0 && strings.TrimSpace(line[:i]) == "-" {
+			rest := line[i+len(marker):]
+			if marker == "[fail]" {
+				rest = bad.Render(rest)
+			}
+			return line[:i] + style.Render(marker) + rest
+		}
+	}
+	for _, phrase := range failurePhrases {
+		if strings.Contains(line, phrase) {
+			return bad.Render(line)
+		}
+	}
+	return line
 }
 
 // Run opens the dashboard and returns when the user quits.
