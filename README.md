@@ -208,7 +208,8 @@ For an Apple `container` stack started and stopped by your own `up` and `down` s
   containers is running
 
 State comes from `container list`: `running` if all of `containers` run, `partial` if some do,
-`stopped` if none do. When the container system itself isn't running, the stack is `stopped`.
+`stopped` if none do. When the container system is confirmed down (`unregistered`), the stack is
+`stopped`; a system that doesn't answer its health check is `unknown`, which blocks the eject.
 
 Apple container's system service keeps files open on the drive even after a stack stops. With
 `stop_system: true`, `stop` also runs `container system stop`, and a system still running counts as

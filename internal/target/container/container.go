@@ -93,26 +93,39 @@ type snapshot struct {
 }
 
 // probe reads the container system's status and, when it's up, every container's state.
+//
+// Only a confirmed answer counts. The system is down only when its status is "unregistered": no
+// launchd job exists, so nothing can be running. A registered daemon that fails its health check
+// reports something else, and that stays unknown, which blocks eject.
 func probe() (snapshot, error) {
-	output, code, err := run("container", "system", "status")
+	output, code, err := run("container", "system", "status", "--format", "json")
 	if err != nil {
 		return snapshot{}, fmt.Errorf("container system status: %w", err)
 	}
-	if code != 0 {
-		if strings.Contains(output, "not running") {
-			return snapshot{systemUp: false}, nil
-		}
-		return snapshot{}, fmt.Errorf("container system status: exit %d: %s", code, strings.TrimSpace(output))
+	var status struct {
+		Status string `json:"status"`
+	}
+	if jsonErr := json.Unmarshal([]byte(output), &status); jsonErr != nil {
+		return snapshot{}, fmt.Errorf("container system status: exit %d, unreadable output: %s", code, strings.TrimSpace(output))
+	}
+	switch {
+	case status.Status == "unregistered":
+		return snapshot{systemUp: false}, nil
+	case status.Status == "running" && code == 0:
+	default:
+		return snapshot{}, fmt.Errorf("container system status: exit %d, status %q", code, status.Status)
 	}
 
 	output, code, err = run("container", "list", "--all", "--format", "json")
 	if err != nil || code != 0 {
 		return snapshot{}, fmt.Errorf("container list: exit %d: %s %v", code, strings.TrimSpace(output), errOrEmpty(err))
 	}
+	// Pointers tell a missing field from an empty one: an entry without an id or a state can't be
+	// matched to the config, so the whole list is treated as unreadable rather than guessed at.
 	var list []struct {
-		ID     string `json:"id"`
-		Status struct {
-			State string `json:"state"`
+		ID     *string `json:"id"`
+		Status *struct {
+			State *string `json:"state"`
 		} `json:"status"`
 	}
 	if err := json.Unmarshal([]byte(output), &list); err != nil {
@@ -120,10 +133,13 @@ func probe() (snapshot, error) {
 	}
 
 	snap := snapshot{systemUp: true, running: map[string]bool{}}
-	for _, c := range list {
+	for i, c := range list {
+		if c.ID == nil || *c.ID == "" || c.Status == nil || c.Status.State == nil || *c.Status.State == "" {
+			return snapshot{}, fmt.Errorf("container list: entry %d has no id or state", i)
+		}
 		// Anything other than "stopped" (running, starting, stopping...) may be using the drive.
-		if c.Status.State != "stopped" {
-			snap.running[c.ID] = true
+		if *c.Status.State != "stopped" {
+			snap.running[*c.ID] = true
 		}
 	}
 	return snap, nil

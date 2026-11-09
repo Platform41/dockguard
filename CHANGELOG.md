@@ -5,7 +5,7 @@ All notable changes to DockGuard are documented in this file.
 ## [Unreleased] - v0.4.0
 
 ### Added
-- `container` target kind for Apple `container` stacks started and stopped by your own `up` and `down` scripts. State comes from `container list` (`running`, `partial` or `stopped`); a stopped container system means the stack is stopped.
+- `container` target kind for Apple `container` stacks started and stopped by your own `up` and `down` scripts. State comes from `container list` (`running`, `partial` or `stopped`); a container system confirmed down (`unregistered`) means the stack is stopped, and anything unconfirmed is `unknown`.
 - `stop_system` option for `container` targets: `stop` also stops Apple container's system service, which keeps files open on the drive, and refuses while containers outside the stack are running. While the system runs, the stack counts as `partial` for the eject rule.
 
 ## [v0.3.0] - 2026-11-08

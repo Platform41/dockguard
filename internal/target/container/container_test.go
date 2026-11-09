@@ -15,14 +15,15 @@ import (
 
 // machine fakes the container CLI: the system is up or down, and containers have states.
 type machine struct {
-	systemUp    bool
-	statusErr   error  // the CLI couldn't run
-	statusOther bool   // status fails for a reason other than "not running"
-	listJSON    string // overrides the generated list
-	states      map[string]string
-	ran         []string
-	downStops   []string // containers the down script stops
-	scriptCode  int
+	systemUp   bool
+	statusErr  error  // the CLI couldn't run
+	statusOut  string // overrides the status output, with statusCode
+	statusCode int
+	listJSON   string // overrides the generated list
+	states     map[string]string
+	ran        []string
+	downStops  []string // containers the down script stops
+	scriptCode int
 }
 
 func install(t *testing.T, m *machine) {
@@ -34,16 +35,16 @@ func install(t *testing.T, m *machine) {
 		cmd := name + " " + strings.Join(args, " ")
 		m.ran = append(m.ran, cmd)
 		switch cmd {
-		case "container system status":
+		case "container system status --format json":
 			switch {
 			case m.statusErr != nil:
 				return "", -1, m.statusErr
-			case m.statusOther:
-				return "permission denied", 2, nil
+			case m.statusOut != "":
+				return m.statusOut, m.statusCode, nil
 			case !m.systemUp:
-				return "apiserver is not running and not registered with launchd", 1, nil
+				return `{"status":"unregistered"}`, 1, nil
 			}
-			return "apiserver is running", 0, nil
+			return `{"resources":{"containersRunning":0},"status":"running"}`, 0, nil
 		case "container list --all --format json":
 			if m.listJSON != "" {
 				return m.listJSON, 0, nil
@@ -104,7 +105,7 @@ func TestStateWhenSystemIsDownIsStopped(t *testing.T) {
 func TestStateIsUnknownWhenProbesFail(t *testing.T) {
 	for name, m := range map[string]*machine{
 		"CLI missing":        {statusErr: errors.New("executable file not found")},
-		"status fails oddly": {statusOther: true},
+		"status fails oddly": {statusOut: "permission denied", statusCode: 2},
 		"list isn't JSON":    {systemUp: true, listJSON: "Error: internalError"},
 	} {
 		install(t, m)
@@ -195,7 +196,7 @@ func TestStopWhenAlreadyStopped(t *testing.T) {
 }
 
 func TestStopFailsWhenStateIsUnknown(t *testing.T) {
-	m := &machine{statusOther: true}
+	m := &machine{statusOut: "permission denied", statusCode: 2}
 	install(t, m)
 
 	if stopped, err := fizzy(true).Stop(); stopped || err == nil || ran(m, "/x/fizzy-down.sh") {
@@ -249,5 +250,40 @@ func TestChecks(t *testing.T) {
 	}
 	if checks.AllOK(items) {
 		t.Fatal("a non-executable down script passed")
+	}
+}
+
+// Review on PR #9: only a confirmed "unregistered" status means stopped. A registered daemon that
+// fails its health check (a status other than running, or the plain-text "is not running") is
+// unknown, which blocks eject.
+func TestOnlyUnregisteredSystemIsStopped(t *testing.T) {
+	for name, m := range map[string]*machine{
+		"health check failed (text)": {statusOut: "apiserver is not running", statusCode: 1},
+		"registered, not running":    {statusOut: `{"status":"registered"}`, statusCode: 1},
+		"unhealthy":                  {statusOut: `{"status":"unhealthy"}`, statusCode: 1},
+		"no status field":            {statusOut: `{}`, statusCode: 1},
+		"running but exit 1":         {statusOut: `{"status":"running"}`, statusCode: 1},
+	} {
+		install(t, m)
+		if s, err := fizzy(true).State(); s != target.Unknown || err == nil {
+			t.Fatalf("%s: State() = %v, %v; want unknown", name, s, err)
+		}
+	}
+}
+
+// Review on PR #9: list entries without an id or a state can't be trusted, so the list is
+// unreadable and the state unknown, instead of a running entry being lost.
+func TestListEntriesMustHaveIDAndState(t *testing.T) {
+	for name, list := range map[string]string{
+		"missing id":     `[{"status":{"state":"running"}},{"id":"fizzy-app","status":{"state":"stopped"}}]`,
+		"empty id":       `[{"id":"","status":{"state":"running"}}]`,
+		"missing state":  `[{"id":"fizzy-db","status":{}}]`,
+		"missing status": `[{"id":"fizzy-db"}]`,
+		"not a list":     `{"id":"fizzy-db"}`,
+	} {
+		install(t, &machine{systemUp: true, listJSON: list})
+		if s, err := fizzy(false).State(); s != target.Unknown || err == nil {
+			t.Fatalf("%s: State() = %v, %v; want unknown", name, s, err)
+		}
 	}
 }
