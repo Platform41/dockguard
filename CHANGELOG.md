@@ -2,6 +2,12 @@
 
 All notable changes to DockGuard are documented in this file.
 
+## [Unreleased]
+
+### Added
+- MIT license, so DockGuard can be used, changed and shared.
+- README: install the latest release with `go install github.com/platform41/dockguard/cmd/dockguard@latest`.
+
 ## [v0.4.0] - 2026-11-09
 
 ### Added
