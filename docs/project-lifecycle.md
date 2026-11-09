@@ -86,7 +86,7 @@ Working product promise:
 - protection against SSD disconnects after Docker Desktop is already running
 - Windows support
 - Linux support
-- GUI or menu bar application
+- GUI or menu bar application (a terminal dashboard inside the CLI, `dockguard ui`, is in scope from v0.5.0: D-018)
 - background daemon behavior
 
 ---
