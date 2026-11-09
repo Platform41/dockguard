@@ -2,7 +2,7 @@
 
 All notable changes to DockGuard are documented in this file.
 
-## [Unreleased] - v0.4.0
+## [v0.4.0] - 2026-11-09
 
 ### Added
 - `container` target kind for Apple `container` stacks started and stopped by your own `up` and `down` scripts. State comes from `container list` (`running`, `partial` or `stopped`); a container system confirmed down (`unregistered`) means the stack is stopped, and anything unconfirmed is `unknown`.
@@ -68,6 +68,7 @@ All notable changes to DockGuard are documented in this file.
 ### Fixed
 - Fixed Docker Desktop settings path matching to support case-insensitive keys such as `DataFolder`.
 
+[v0.4.0]: https://github.com/platform41/dockguard/compare/v0.3.0...v0.4.0
 [v0.3.0]: https://github.com/platform41/dockguard/compare/v0.2.0...v0.3.0
 [v0.2.0]: https://github.com/platform41/dockguard/compare/v0.1.2...v0.2.0
 [v0.1.2]: https://github.com/platform41/dockguard/compare/v0.1.1...v0.1.2
