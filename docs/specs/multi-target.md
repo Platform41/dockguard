@@ -95,7 +95,8 @@ DockGuard ejects the drive only when **every configured target is confirmed `sto
 A stop command reporting success isn't enough; only the fresh probe counts. There is no flag to
 override the rule: someone who wants to eject anyway can use Finder or `diskutil`, outside
 DockGuard's guarantee. If the drive is still busy after all targets are stopped (a process outside
-DockGuard's config), the v0.1 busy-volume message and retry still apply.
+DockGuard's config), the v0.1 busy-volume message and retry still apply. When macOS refuses the eject as busy, the message names the processes with files open on the
+drive (from `lsof`), so the user knows what to quit.
 
 ---
 

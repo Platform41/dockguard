@@ -13,6 +13,7 @@ var (
 	lookPath   = exec.LookPath
 	runCommand = runDiskutilCommand
 	sleep      = time.Sleep
+	holdersOf  = Holders
 )
 
 func EjectVolume(mountPath string) error {
@@ -42,6 +43,13 @@ func EjectVolume(mountPath string) error {
 		}
 	}
 
+	// Name what's holding the drive when lsof can tell; otherwise fall back to general advice.
+	if holders, err := holdersOf(mountPath); err == nil && len(holders) > 0 {
+		return fmt.Errorf(
+			"eject external mount %q failed after %d attempts: %w\nvolume is busy; still using the drive: %s\nquit those (or close their files on the drive), then retry",
+			mountPath, maxAttempts, lastErr, describeHolders(holders),
+		)
+	}
 	return fmt.Errorf(
 		"eject external mount %q failed after %d attempts: %w\nvolume is busy; close Finder previews/windows for this drive, ensure terminals are not inside the mount, and release file locks (for example QuickLook on Docker.raw), then retry",
 		mountPath,

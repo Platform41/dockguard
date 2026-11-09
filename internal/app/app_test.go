@@ -411,3 +411,109 @@ func TestStartUsesGuardState(t *testing.T) {
 		t.Fatalf("Run = %d, %v; started = %v", code, err, f.started)
 	}
 }
+
+// stopOrder records the order fakes are stopped in.
+type ordered struct {
+	*fake
+	order *[]string
+}
+
+func (o *ordered) Stop() (bool, error) {
+	*o.order = append(*o.order, o.name)
+	return o.fake.Stop()
+}
+
+// setupOrdered is setup with fakes that record their stop order.
+func setupOrdered(t *testing.T, fakes ...*fake) (*harness, *[]string) {
+	t.Helper()
+	h := setup(t, true, false, fakes...)
+	order := &[]string{}
+	buildTargets = func(cfg config.Config) ([]entry, error) {
+		var entries []entry
+		for i, f := range fakes {
+			entries = append(entries, entry{t: &ordered{fake: f, order: order}, cfg: cfg.Targets[i]})
+		}
+		return entries, nil
+	}
+	return h, order
+}
+
+func TestParseArgsAll(t *testing.T) {
+	if got, err := parseArgs([]string{"stop", "--all", "--eject"}); err != nil || !got.All || !got.Eject {
+		t.Fatalf("parseArgs = %#v, %v", got, err)
+	}
+	for _, args := range [][]string{{"start", "--all"}, {"stop", "docker", "--all"}} {
+		if _, err := parseArgs(args); err == nil {
+			t.Fatalf("parseArgs(%v) error = nil", args)
+		}
+	}
+}
+
+// AS-19: everything running; stop --all --eject stops in reverse config order, then ejects.
+func TestStopAllStopsInReverseOrderThenEjects(t *testing.T) {
+	h, order := setupOrdered(t,
+		&fake{name: "docker", states: states(target.Running, target.Stopped)},
+		&fake{name: "pg", states: states(target.Running, target.Stopped)},
+		&fake{name: "fizzy", states: states(target.Partial, target.Stopped)},
+	)
+
+	code, err := Run([]string{"stop", "--all", "--eject"})
+	if code != 0 || err != nil || !h.ejected {
+		t.Fatalf("Run = %d, %v; ejected = %v\n%s", code, err, h.ejected, h.out)
+	}
+	if got := strings.Join(*order, ","); got != "fizzy,pg,docker" {
+		t.Fatalf("stop order = %s", got)
+	}
+}
+
+func TestStopAllSkipsStoppedTargets(t *testing.T) {
+	h, order := setupOrdered(t,
+		&fake{name: "docker", states: states(target.Stopped)},
+		&fake{name: "pg", states: states(target.Running, target.Stopped)},
+	)
+
+	if code, err := Run([]string{"stop", "--all"}); code != 0 || err != nil || h.ejected {
+		t.Fatalf("Run = %d, %v; ejected = %v", code, err, h.ejected)
+	}
+	if got := strings.Join(*order, ","); got != "pg" {
+		t.Fatalf("stopped %s, want only pg", got)
+	}
+	if !strings.Contains(h.out.String(), "Docker") && !strings.Contains(h.out.String(), "docker is already stopped") {
+		t.Fatalf("output:\n%s", h.out)
+	}
+}
+
+// AS-20: one target fails to stop; the others are still stopped, and the drive isn't ejected.
+func TestStopAllCarriesOnButDoesNotEjectAfterAFailure(t *testing.T) {
+	h, order := setupOrdered(t,
+		&fake{name: "docker", states: states(target.Running, target.Stopped)},
+		&fake{name: "pg", states: states(target.Running), stopErr: errors.New("pg_ctl: server does not shut down")},
+		&fake{name: "fizzy", states: states(target.Running, target.Stopped)},
+	)
+
+	code, err := Run([]string{"stop", "--all", "--eject"})
+	if code != 1 || err == nil || h.ejected {
+		t.Fatalf("Run = %d, %v; ejected = %v", code, err, h.ejected)
+	}
+	if got := strings.Join(*order, ","); got != "fizzy,pg,docker" {
+		t.Fatalf("stop order = %s; the failure should not stop the rest", got)
+	}
+	if !strings.Contains(h.out.String(), "failed to stop: pg") || !strings.Contains(h.out.String(), "Not ejecting") {
+		t.Fatalf("output:\n%s", h.out)
+	}
+}
+
+// AS-30: a target still unknown after stop --all blocks the eject, with the probe error.
+func TestStopAllDoesNotEjectWhileATargetStaysUnknown(t *testing.T) {
+	h, _ := setupOrdered(t,
+		&fake{name: "docker", states: states(target.Running, target.Stopped)},
+		&fake{name: "fizzy", states: states(target.Unknown), stateErr: errors.New("container system status: exit 1, status \"registered\"")},
+	)
+
+	if code, _ := Run([]string{"stop", "--all", "--eject"}); code != 1 || h.ejected {
+		t.Fatalf("code = %d, ejected = %v", code, h.ejected)
+	}
+	if !strings.Contains(h.out.String(), "fizzy: unknown") {
+		t.Fatalf("output:\n%s", h.out)
+	}
+}

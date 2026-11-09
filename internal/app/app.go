@@ -42,6 +42,7 @@ type options struct {
 	Target     string
 	ConfigPath string
 	Eject      bool
+	All        bool
 }
 
 // entry pairs a target with its config.
@@ -80,6 +81,9 @@ func Run(args []string) (int, error) {
 		return runList(cfg, entries)
 	case "status":
 		return runStatus(cfg, entries)
+	}
+	if opts.All {
+		return runStopAll(cfg, entries, opts.Eject)
 	}
 
 	name := opts.Target
@@ -125,6 +129,8 @@ func parseArgs(args []string) (options, error) {
 			i++
 		case arg == "--eject":
 			opts.Eject = true
+		case arg == "--all":
+			opts.All = true
 		case strings.HasPrefix(arg, "-"):
 			return options{}, fmt.Errorf("unknown argument %q", arg)
 		case takesTarget[opts.Command] && opts.Target == "":
@@ -136,6 +142,12 @@ func parseArgs(args []string) (options, error) {
 
 	if opts.Eject && opts.Command != "stop" {
 		return options{}, errors.New("--eject is only supported with the stop command")
+	}
+	if opts.All && opts.Command != "stop" {
+		return options{}, errors.New("--all is only supported with the stop command")
+	}
+	if opts.All && opts.Target != "" {
+		return options{}, fmt.Errorf("--all stops every target; drop %q or drop --all", opts.Target)
 	}
 
 	return opts, nil
@@ -320,6 +332,43 @@ func runStop(cfg config.Config, entries []entry, e entry, eject bool) (int, erro
 	justStopped := map[string]bool{}
 	if stopRequested {
 		justStopped[e.t.Name()] = true
+	}
+	return ejectIfAllStopped(cfg, entries, justStopped)
+}
+
+// runStopAll stops every target that isn't confirmed stopped (running, partial or unknown), in
+// reverse config order, and keeps going when one fails. Any failure means no eject (spec §2).
+func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
+	justStopped := map[string]bool{}
+	var failed []string
+
+	for i := len(entries) - 1; i >= 0; i-- {
+		e := entries[i]
+		if state, _ := e.t.State(); state == target.Stopped {
+			output.PrintAlreadyStopped(display(e))
+			continue
+		}
+		stopRequested, err := e.t.Stop()
+		switch {
+		case err != nil:
+			output.PrintStopFailed(display(e), err)
+			failed = append(failed, e.t.Name())
+		case stopRequested:
+			output.PrintStopped(display(e))
+			justStopped[e.t.Name()] = true
+		default:
+			output.PrintAlreadyStopped(display(e))
+		}
+	}
+
+	if len(failed) > 0 {
+		if eject {
+			output.PrintNotEjecting(cfg.Drive, "these targets failed to stop: "+strings.Join(failed, ", "))
+		}
+		return 1, fmt.Errorf("failed to stop: %s", strings.Join(failed, ", "))
+	}
+	if !eject {
+		return 0, nil
 	}
 	return ejectIfAllStopped(cfg, entries, justStopped)
 }

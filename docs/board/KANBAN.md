@@ -44,22 +44,6 @@
 
 ### Backlog
 
-- [ ] `[v0.4.0] stop --all [--eject]`
-  **Owner:** Three
-  **Priority:** P2
-  **Outcome:** AS-19, AS-20, AS-30; AS-29's `stop --all --eject` part
-  **Source docs:** `docs/specs/multi-target.md` §2, §2.3
-  **Dependencies:** container kind
-  **Notes:** Pair with the eject-busy card; both change the eject path.
-
-- [ ] `[v0.4.0] Name the processes holding the drive when eject fails as busy`
-  **Owner:** Three
-  **Priority:** P2
-  **Outcome:** When macOS refuses the eject as busy, the message lists the processes (name and PID) with files open on the drive, instead of only generic advice
-  **Source docs:** `docs/specs/multi-target.md` §2.3
-  **Dependencies:** v0.3.0
-  **Notes:** Found in the v0.3.0 live check: every target was confirmed stopped, but Chrome held one file inside `Xcode.app` on the drive (macOS loads share extensions for the Share menu). One `lsof` call identified it.
-
 ### This Week
 
 ### Doing
@@ -68,12 +52,23 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.4.0] container kind (Fizzy)`
+- [ ] `[v0.4.0] stop --all [--eject]`
   **Owner:** Three
   **Priority:** P2
-  **Outcome:** AS-18 (running stack listed), AS-29 (partial stack); D-017 (`stop_system`)
-  **Source docs:** `docs/specs/multi-target.md` §4.4
-  **Branch:** `feat/container-kind`
+  **Outcome:** AS-19, AS-20, AS-30; AS-29's `stop --all --eject` part
+  **Source docs:** `docs/specs/multi-target.md` §2, §2.3
+  **Dependencies:** container kind
+  **Notes:** Pair with the eject-busy card; both change the eject path.
+  **Branch:** `feat/stop-all`
+
+- [ ] `[v0.4.0] Name the processes holding the drive when eject fails as busy`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** When macOS refuses the eject as busy, the message lists the processes (name and PID) with files open on the drive, instead of only generic advice
+  **Source docs:** `docs/specs/multi-target.md` §2.3
+  **Dependencies:** v0.3.0
+  **Notes:** Found in the v0.3.0 live check: every target was confirmed stopped, but Chrome held one file inside `Xcode.app` on the drive (macOS loads share extensions for the Share menu). One `lsof` call identified it.
+  **Branch:** `feat/stop-all`
 
 ### Blocked
 
@@ -85,6 +80,14 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.4.0] container kind (Fizzy)`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** AS-18 (running stack listed), AS-29 (partial stack); D-017 (`stop_system`)
+  **Source docs:** `docs/specs/multi-target.md` §4.4
+  **Completed:** 2026-11-09
+  **Branch:** `feat/container-kind` (PR #9, merge `2271e24`)
 
 - [x] `[v0.3.0] Release: notes, CHANGELOG, live check, tag`
   **Owner:** One

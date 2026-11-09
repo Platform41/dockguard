@@ -82,6 +82,7 @@ DockGuard is not an "images-only offload" tool. It protects a setup where Docker
 | `dockguard check [target]` | Runs one target's checks, including the already-running guard |
 | `dockguard start [target]` | Runs the checks, then starts the target only if they all pass |
 | `dockguard stop [target] [--eject]` | Stops the target; with `--eject`, ejects the drive under the eject rule below |
+| `dockguard stop --all [--eject]` | Stops every target that isn't confirmed stopped, in reverse config order, carrying on past failures; ejects only if all stopped |
 
 With no target, `check`, `start` and `stop` act on the target named `docker`, so v0.1 commands keep
 working. Every command accepts `--config <path>`.
@@ -89,7 +90,8 @@ working. Every command accepts `--config <path>`.
 **Eject rule.** After stopping, DockGuard checks every configured target again, waiting up to 30
 seconds for the one it just stopped. It ejects only when every target is confirmed stopped. A
 target that is running, partly running, or whose state can't be read blocks the eject, and DockGuard
-names it. There's no override flag.
+names it. There's no override flag. If macOS still refuses because another process has files open on
+the drive, DockGuard names those processes (for example `Google Chrome (PID 33061)`).
 
 ## Configuration
 
@@ -223,6 +225,7 @@ refuses (and names them) while containers outside the stack are running.
 - Free space below threshold: lower `minimum_free_space_gb` or free space on the SSD.
 - Docker already running: stop Docker Desktop or set `fail_if_already_running: false`.
 - Drive not ejected: `dockguard list` shows which target is still running or in an unknown state.
+- Drive busy: the eject message names the processes holding the drive; quit them and retry.
 
 ## Project Layout
 
