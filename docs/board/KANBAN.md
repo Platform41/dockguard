@@ -52,13 +52,6 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.4.0] Release: notes, CHANGELOG, live check, tag`
-  **Owner:** One
-  **Priority:** P1
-  **Branch:** `chore/release-v0.4.0`
-  **Deliverable:** `docs/releases/v0.4.0.md`, dated CHANGELOG, tag `v0.4.0`
-  **Waiting on:** Removing the Fizzy launchd agent (D-014), then a live check from the internal disk: start Docker, Xcode, the PostgreSQL cluster and Fizzy, then one `dockguard stop --all --eject` ejects the drive. Tag after merge.
-
 ### Blocked
 
 - [ ] `[Phase 4] Validate Docker Desktop CLI behavior on target machine`
@@ -69,6 +62,14 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.4.0] Release: notes, CHANGELOG, live check, tag`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-11-09
+  **Branch:** `chore/release-v0.4.0` (PR #11)
+  **Deliverable:** `docs/releases/v0.4.0.md`, tag `v0.4.0`
+  **Notes:** Live check from the internal disk with the real config. Fizzy's login agent was removed first (D-014). `start` ran for the PostgreSQL cluster, Xcode and Fizzy, and `list` showed all three running. A `stop --all --eject` then stopped everything and ejected: the cluster log shows a fast shutdown at 09:57, Xcode quit, and the container system was down. That run's printed output wasn't captured; a later run with everything stopped printed "already stopped" for each and ejected. `stop --all` with a running cluster was re-checked without eject and printed "stop requested".
 
 - [x] `[v0.4.0] stop --all [--eject]`
   **Owner:** Three
