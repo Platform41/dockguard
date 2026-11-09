@@ -287,3 +287,17 @@ func TestListEntriesMustHaveIDAndState(t *testing.T) {
 		}
 	}
 }
+
+// Re-review on PR #9: JSON null is no answer, not an empty list. An empty array still means no
+// containers.
+func TestListNullIsUnknownButEmptyArrayIsStopped(t *testing.T) {
+	install(t, &machine{systemUp: true, listJSON: "null"})
+	if s, err := fizzy(false).State(); s != target.Unknown || err == nil {
+		t.Fatalf("null: State() = %v, %v; want unknown", s, err)
+	}
+
+	install(t, &machine{systemUp: true, listJSON: "[]"})
+	if s, err := fizzy(false).State(); s != target.Stopped || err != nil {
+		t.Fatalf("[]: State() = %v, %v; want stopped", s, err)
+	}
+}

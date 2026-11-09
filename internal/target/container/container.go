@@ -131,6 +131,10 @@ func probe() (snapshot, error) {
 	if err := json.Unmarshal([]byte(output), &list); err != nil {
 		return snapshot{}, fmt.Errorf("container list: can't read its JSON: %w", err)
 	}
+	// "[]" decodes to an empty list (no containers); "null" leaves it nil, which is no answer.
+	if list == nil {
+		return snapshot{}, fmt.Errorf("container list: got %q instead of a list", strings.TrimSpace(output))
+	}
 
 	snap := snapshot{systemUp: true, running: map[string]bool{}}
 	for i, c := range list {
