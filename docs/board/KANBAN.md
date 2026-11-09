@@ -52,12 +52,12 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.5.0] Terminal dashboard: dockguard ui`
-  **Owner:** Three
-  **Priority:** P2
-  **Outcome:** AS-31 to AS-35
-  **Source docs:** `docs/specs/multi-target.md` §2.4, D-018
-  **Branch:** `feat/dashboard`
+- [ ] `[v0.5.0] Release: notes, CHANGELOG, live check, tag`
+  **Owner:** One
+  **Priority:** P1
+  **Branch:** `chore/release-v0.5.0`
+  **Deliverable:** `docs/releases/v0.5.0.md`, dated CHANGELOG, tag `v0.5.0`
+  **Waiting on:** The user running `dockguard ui` with the real config, including one action from the dashboard. Tag after merge.
 
 ### Blocked
 
@@ -69,6 +69,14 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.5.0] Terminal dashboard: dockguard ui`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** AS-31 to AS-35
+  **Source docs:** `docs/specs/multi-target.md` §2.4, D-018
+  **Completed:** 2026-11-09
+  **Branch:** `feat/dashboard` (PR #14, merge `5de821f`)
 
 - [x] `[v0.4.0] Release: notes, CHANGELOG, live check, tag`
   **Owner:** One
