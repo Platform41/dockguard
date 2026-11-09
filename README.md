@@ -16,7 +16,13 @@ stacks (see [`docs/specs/multi-target.md`](docs/specs/multi-target.md)).
 
 ## Install
 
-From source (Go 1.23+):
+With Go 1.23 or later on macOS, install the latest release:
+
+```bash
+go install github.com/platform41/dockguard/cmd/dockguard@latest
+```
+
+Or from a clone of this repo:
 
 ```bash
 go install ./cmd/dockguard
@@ -241,3 +247,7 @@ dockguard/
 ├── internal/target/       # target interface and kinds
 └── examples/
 ```
+
+## License
+
+DockGuard is released under the [MIT License](LICENSE).
