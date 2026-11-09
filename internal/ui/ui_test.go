@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/platform41/dockguard/internal/target"
 )
@@ -371,6 +372,36 @@ func TestBlockerLineWraps(t *testing.T) {
 	for _, r := range f.snap.Rows {
 		if !strings.Contains(ansi.Strip(view), r.Name+" (running)") {
 			t.Fatalf("blocker %s missing:\n%s", r.Name, view)
+		}
+	}
+}
+
+// Check output in the panel is coloured by outcome, like the CLI's own output in a terminal.
+func TestPanelColoursResults(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
+
+	ok := colorLine("- [ok] data_dir on the drive (/Volumes/ExternalSSD/pgdata/myapp)")
+	fail := colorLine("- [fail] myapp-db not already running (myapp-db is already running)")
+	skip := colorLine("- [skip] data_dir exists (skipped: drive not mounted)")
+	refused := colorLine("Not ejecting /Volumes/ExternalSSD: these targets aren't confirmed stopped:")
+	plain := colorLine("Docker Desktop stop requested.")
+
+	for name, got := range map[string]string{"ok": ok, "fail": fail, "skip": skip, "refused": refused} {
+		if got == ansi.Strip(got) {
+			t.Fatalf("%s line has no colour: %q", name, got)
+		}
+	}
+	if ok != "- "+good.Render("[ok]")+" data_dir on the drive (/Volumes/ExternalSSD/pgdata/myapp)" {
+		t.Fatalf("ok line = %q", ok)
+	}
+	if plain != "Docker Desktop stop requested." {
+		t.Fatalf("plain line changed: %q", plain)
+	}
+	// Colour never changes the text.
+	for _, got := range []string{ok, fail, skip, refused} {
+		if !strings.HasPrefix(ansi.Strip(got), "- [") && !strings.HasPrefix(ansi.Strip(got), "Not ejecting") {
+			t.Fatalf("text changed: %q", ansi.Strip(got))
 		}
 	}
 }
