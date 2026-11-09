@@ -119,10 +119,12 @@ A live terminal dashboard, opened with `dockguard ui`. Bare `dockguard` still pr
 
 - **Drive:** mounted or not, with used space and free space.
 - **Eject line:** `✓ safe to eject` when every target is confirmed `stopped`, otherwise `✗ blocked by:`
-  each target that isn't, with its state. It applies the same rule as §2.3.
+  each target that isn't, with its state. It applies the same rule as §2.3. A long list wraps onto further lines, so every
+  blocker stays visible.
 - **Targets:** in config order, with `●` running, `◐` partial, `○` stopped and `?` unknown (the
   probe error is shown for the selected target). Refreshed every 3 seconds with the same probes as
-  `list`; a refresh never overlaps the previous one.
+  `list`. Probes and actions never overlap: no probe starts while one is in flight or an action
+  runs, and an action requested during a probe waits for it, then runs, followed by a fresh probe.
 - **Actions** run the same code as the matching commands, so they follow the same rules: `s` is
   `start <target>` (preflight first), `x` is `stop <target>`, `c` is `check <target>`, and `E` is
   `stop --all --eject`. `x` and `E` ask for confirmation. The output of the last action, including

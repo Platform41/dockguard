@@ -302,3 +302,75 @@ func TestBurstCannotConfirm(t *testing.T) {
 		t.Fatalf("calls = %v, confirming = %v; the prompt should still be waiting", f.calls, next.(Model).confirming)
 	}
 }
+
+// Review on PR #14: an action requested while a probe is in flight waits for that probe, so a
+// probe and an action never overlap and an older snapshot can't overwrite a newer one.
+func TestActionsWaitForAnInFlightRefresh(t *testing.T) {
+	orig := RefreshInterval
+	t.Cleanup(func() { RefreshInterval = orig })
+	RefreshInterval = time.Millisecond
+
+	for _, keys := range [][]string{{"s"}, {"x", "y"}, {"E", "y"}} {
+		f := &fakeCtl{snap: snapshot(target.Stopped, target.Stopped), ok: true}
+		m := loaded(f)
+		m.refreshing = true
+
+		m, cmd := press(m, keys...)
+		runAll(cmd)
+		if len(f.calls) != 0 {
+			t.Fatalf("%v: action ran during a refresh: %v", keys, f.calls)
+		}
+		if !m.busy || !strings.Contains(m.View(), "Waiting") {
+			t.Fatalf("%v: should show the action waiting:\n%s", keys, m.View())
+		}
+
+		// While it waits, a tick starts no probe.
+		before := f.snaps
+		_, cmd = m.Update(tickMsg{})
+		runAll(cmd)
+		if f.snaps != before {
+			t.Fatalf("%v: probed while an action was waiting", keys)
+		}
+
+		// The probe's result arrives: now, and only now, the action runs.
+		next, cmd := m.Update(snapshotMsg(f.snap))
+		m = next.(Model)
+		if m.refreshing {
+			t.Fatalf("%v: a probe was started alongside the action", keys)
+		}
+		msgs := runAll(cmd)
+		if len(f.calls) != 1 || len(msgs) != 1 {
+			t.Fatalf("%v: calls after the refresh = %v, msgs = %v", keys, f.calls, msgs)
+		}
+
+		// When the action finishes, exactly one probe follows, after it.
+		before = f.snaps
+		next, cmd = m.Update(msgs[0])
+		m = next.(Model)
+		runAll(cmd)
+		if f.snaps != before+1 || m.busy {
+			t.Fatalf("%v: probes after the action = %d, busy = %v", keys, f.snaps-before, m.busy)
+		}
+	}
+}
+
+// Review on PR #14: the blocker line wraps instead of running past the terminal edge, and every
+// blocker stays visible.
+func TestBlockerLineWraps(t *testing.T) {
+	f := &fakeCtl{snap: snapshot(target.Running, target.Running, target.Running, target.Running)}
+	f.snap.Rows[0].Name = "docker-desktop-main"
+	f.snap.Rows[3].Name = "myapp-container-stack"
+	m := loaded(f)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	view := next.(Model).View()
+	for _, line := range strings.Split(view, "\n") {
+		if w := lipgloss.Width(line); w > 80 {
+			t.Fatalf("line is %d wide:\n%s", w, line)
+		}
+	}
+	for _, r := range f.snap.Rows {
+		if !strings.Contains(ansi.Strip(view), r.Name+" (running)") {
+			t.Fatalf("blocker %s missing:\n%s", r.Name, view)
+		}
+	}
+}

@@ -101,6 +101,8 @@ type Model struct {
 	refreshing bool
 	busy       bool
 	confirming *pending
+	// queued is an action waiting for an in-flight probe to finish.
+	queued     *pending
 	lastTitle  string
 	lastOK     bool
 	lastOutput string
@@ -134,6 +136,17 @@ func (m Model) run(a Action, name string) tea.Cmd {
 	}
 }
 
+// dispatch starts an action, or queues it until the probe in flight has finished: probes and
+// actions never overlap, so an older snapshot can't overwrite the result of a newer action.
+func (m Model) dispatch(a Action, name string) (Model, tea.Cmd) {
+	m.busy = true
+	if m.refreshing {
+		m.queued = &pending{action: a, target: name}
+		return m, nil
+	}
+	return m, m.run(a, name)
+}
+
 func (m Model) selectedName() string {
 	if m.selected >= 0 && m.selected < len(m.snap.Rows) {
 		return m.snap.Rows[m.selected].Name
@@ -154,6 +167,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.selected < 0 {
 			m.selected = 0
+		}
+		// An action that was waiting for this probe runs now.
+		if q := m.queued; q != nil {
+			m.queued = nil
+			return m, m.run(q.action, q.target)
 		}
 		return m, nil
 
@@ -206,8 +224,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p := m.confirming
 		m.confirming = nil
 		if k == "y" || k == "Y" {
-			m.busy = true
-			return m, m.run(p.action, p.target)
+			return m.dispatch(p.action, p.target)
 		}
 		m.lastTitle, m.lastOK, m.lastOutput = "cancelled", true, ""
 		return m, nil
@@ -238,13 +255,11 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch k {
 	case "s":
 		if name != "" {
-			m.busy = true
-			return m, m.run(Start, name)
+			return m.dispatch(Start, name)
 		}
 	case "c":
 		if name != "" {
-			m.busy = true
-			return m, m.run(Check, name)
+			return m.dispatch(Check, name)
 		}
 	case "x":
 		if name != "" {
@@ -336,7 +351,7 @@ func (m Model) View() string {
 	case len(blockers) == 0:
 		b.WriteString(fmt.Sprintf(" %s  %s\n", title.Render("Eject"), good.Render("✓ safe to eject")))
 	default:
-		b.WriteString(fmt.Sprintf(" %s  %s %s\n", title.Render("Eject"), bad.Render("✗ blocked by:"), strings.Join(blockers, ", ")))
+		b.WriteString(wrapList(" "+title.Render("Eject")+"  "+bad.Render("✗ blocked by:")+" ", blockers, width))
 	}
 	b.WriteString("\n")
 
@@ -366,7 +381,9 @@ func (m Model) View() string {
 	}
 
 	// Last action.
-	if m.busy {
+	if m.queued != nil {
+		b.WriteString("\n " + warn.Render("Waiting for the current check to finish, then "+m.queued.action.String()+"…") + "\n")
+	} else if m.busy {
 		b.WriteString("\n " + warn.Render("Working…") + "\n")
 	} else if m.lastTitle != "" {
 		status := good.Render("✓")
@@ -399,6 +416,30 @@ func (m Model) View() string {
 	} else {
 		b.WriteString(" " + dim.Render(footer(width-2)) + "\n")
 	}
+	return b.String()
+}
+
+// wrapList writes items after a prefix, separated by ", ", wrapping onto lines indented under the
+// first item so every item stays visible within the width.
+func wrapList(prefix string, items []string, width int) string {
+	indent := strings.Repeat(" ", lipgloss.Width(prefix))
+	var b strings.Builder
+	line := prefix
+	for i, item := range items {
+		sep := ""
+		if i < len(items)-1 {
+			sep = ","
+		}
+		piece := item + sep
+		if i > 0 && lipgloss.Width(line)+1+lipgloss.Width(piece) > width {
+			b.WriteString(strings.TrimRight(line, " ") + "\n")
+			line = indent
+		} else if i > 0 {
+			line += " "
+		}
+		line += piece
+	}
+	b.WriteString(line + "\n")
 	return b.String()
 }
 
