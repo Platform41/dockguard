@@ -209,38 +209,52 @@ func (t *Target) Start() error {
 // Stop runs down when any of the stack's containers runs, then, with stop_system, stops the
 // container system unless containers outside the stack are running.
 func (t *Target) Stop() (bool, error) {
+	stackStopped, err := t.StopStack()
+	if err != nil {
+		return false, err
+	}
+	systemStopped, err := t.StopSystem()
+	return stackStopped || systemStopped, err
+}
+
+// StopStack runs down when any of the stack's containers runs. stop --all calls it for every
+// stack before any StopSystem, so stacks sharing the system don't block each other's shutdown.
+func (t *Target) StopStack() (bool, error) {
 	snap, err := probe()
 	if err != nil {
 		return false, fmt.Errorf("can't tell whether %s is running: %w", t.cfg.Name, err)
 	}
-
-	stopped := false
-	if t.stackState(snap) != target.Stopped {
-		output, code, err := runDetached(t.cfg.Container.Down)
-		if err != nil || code != 0 {
-			return false, fmt.Errorf("stop %s: %s exited %d: %s %s", t.cfg.Name, t.cfg.Container.Down, code, strings.TrimSpace(output), errOrEmpty(err))
-		}
-		stopped = true
+	if t.stackState(snap) == target.Stopped {
+		return false, nil
 	}
+	output, code, err := runDetached(t.cfg.Container.Down)
+	if err != nil || code != 0 {
+		return false, fmt.Errorf("stop %s: %s exited %d: %s %s", t.cfg.Name, t.cfg.Container.Down, code, strings.TrimSpace(output), errOrEmpty(err))
+	}
+	return true, nil
+}
 
+// StopSystem stops the container system when stop_system is set and no container outside the
+// stack is running. Without stop_system it does nothing.
+func (t *Target) StopSystem() (bool, error) {
 	if !t.cfg.Container.StopSystem {
-		return stopped, nil
+		return false, nil
 	}
-	// Re-probe: down may have stopped containers, and only the current state counts.
-	snap, err = probe()
+	// Probe now: only the current state counts.
+	snap, err := probe()
 	if err != nil {
-		return stopped, fmt.Errorf("can't read the container system after stopping %s: %w", t.cfg.Name, err)
+		return false, fmt.Errorf("can't read the container system for %s: %w", t.cfg.Name, err)
 	}
 	if !snap.systemUp {
-		return stopped, nil
+		return false, nil
 	}
 	if others := t.otherRunning(snap); len(others) > 0 {
-		return stopped, fmt.Errorf("not stopping the container system: other containers are running (%s); stopping it would stop them too",
+		return false, fmt.Errorf("not stopping the container system: other containers are running (%s); stopping it would stop them too",
 			strings.Join(others, ", "))
 	}
 	output, code, err := run("container", "system", "stop")
 	if err != nil || code != 0 {
-		return stopped, fmt.Errorf("container system stop: exit %d: %s %s", code, strings.TrimSpace(output), errOrEmpty(err))
+		return false, fmt.Errorf("container system stop: exit %d: %s %s", code, strings.TrimSpace(output), errOrEmpty(err))
 	}
 	return true, nil
 }

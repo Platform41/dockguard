@@ -42,6 +42,7 @@ type options struct {
 	Target     string
 	ConfigPath string
 	Eject      bool
+	All        bool
 }
 
 // entry pairs a target with its config.
@@ -80,6 +81,9 @@ func Run(args []string) (int, error) {
 		return runList(cfg, entries)
 	case "status":
 		return runStatus(cfg, entries)
+	}
+	if opts.All {
+		return runStopAll(cfg, entries, opts.Eject)
 	}
 
 	name := opts.Target
@@ -125,6 +129,8 @@ func parseArgs(args []string) (options, error) {
 			i++
 		case arg == "--eject":
 			opts.Eject = true
+		case arg == "--all":
+			opts.All = true
 		case strings.HasPrefix(arg, "-"):
 			return options{}, fmt.Errorf("unknown argument %q", arg)
 		case takesTarget[opts.Command] && opts.Target == "":
@@ -136,6 +142,12 @@ func parseArgs(args []string) (options, error) {
 
 	if opts.Eject && opts.Command != "stop" {
 		return options{}, errors.New("--eject is only supported with the stop command")
+	}
+	if opts.All && opts.Command != "stop" {
+		return options{}, errors.New("--all is only supported with the stop command")
+	}
+	if opts.All && opts.Target != "" {
+		return options{}, fmt.Errorf("--all stops every target; drop %q or drop --all", opts.Target)
 	}
 
 	return opts, nil
@@ -320,6 +332,81 @@ func runStop(cfg config.Config, entries []entry, e entry, eject bool) (int, erro
 	justStopped := map[string]bool{}
 	if stopRequested {
 		justStopped[e.t.Name()] = true
+	}
+	return ejectIfAllStopped(cfg, entries, justStopped)
+}
+
+// sharedSystemStopper is implemented by targets that run on a shared system service (container
+// stacks). stop --all stops every stack before any system, so stacks don't block each other.
+type sharedSystemStopper interface {
+	StopStack() (bool, error)
+	StopSystem() (bool, error)
+}
+
+// Container stacks must take the two-pass path; this fails to compile if they stop doing so.
+var _ sharedSystemStopper = (*containerkind.Target)(nil)
+
+// runStopAll stops every target that isn't confirmed stopped (running, partial or unknown), in
+// reverse config order, and keeps going when one fails. Shared system services are stopped in a
+// second pass, after every target. Any failure means no eject (spec §2).
+func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
+	justStopped := map[string]bool{}
+	var failed []string
+
+	for i := len(entries) - 1; i >= 0; i-- {
+		e := entries[i]
+		if state, _ := e.t.State(); state == target.Stopped {
+			output.PrintAlreadyStopped(display(e))
+			continue
+		}
+		stop := e.t.Stop
+		if s, ok := e.t.(sharedSystemStopper); ok {
+			stop = s.StopStack
+		}
+		stopRequested, err := stop()
+		switch {
+		case err != nil:
+			output.PrintStopFailed(display(e), err)
+			failed = append(failed, e.t.Name())
+		case stopRequested:
+			output.PrintStopped(display(e))
+			justStopped[e.t.Name()] = true
+		default:
+			output.PrintAlreadyStopped(display(e))
+		}
+	}
+
+	// Second pass: every managed stack is down now, so only unmanaged containers can still stop a
+	// shared system from shutting down. A stack that failed above is skipped.
+	failedSet := map[string]bool{}
+	for _, name := range failed {
+		failedSet[name] = true
+	}
+	for i := len(entries) - 1; i >= 0; i-- {
+		e := entries[i]
+		s, ok := e.t.(sharedSystemStopper)
+		if !ok || failedSet[e.t.Name()] {
+			continue
+		}
+		stopped, err := s.StopSystem()
+		switch {
+		case err != nil:
+			output.PrintStopFailed(display(e), err)
+			failed = append(failed, e.t.Name())
+		case stopped:
+			output.PrintSystemStopped(display(e))
+			justStopped[e.t.Name()] = true
+		}
+	}
+
+	if len(failed) > 0 {
+		if eject {
+			output.PrintNotEjecting(cfg.Drive, "these targets failed to stop: "+strings.Join(failed, ", "))
+		}
+		return 1, fmt.Errorf("failed to stop: %s", strings.Join(failed, ", "))
+	}
+	if !eject {
+		return 0, nil
 	}
 	return ejectIfAllStopped(cfg, entries, justStopped)
 }

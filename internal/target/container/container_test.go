@@ -301,3 +301,57 @@ func TestListNullIsUnknownButEmptyArrayIsStopped(t *testing.T) {
 		t.Fatalf("[]: State() = %v, %v; want stopped", s, err)
 	}
 }
+
+func stackOf(name string, ids ...string) *Target {
+	return New(config.Target{Name: name, Kind: config.KindContainer,
+		Container: &config.Container{Up: "/x/" + name + "-up.sh", Down: "/x/" + name + "-down.sh",
+			Containers: ids, StopSystem: true}}, "/Volumes/X")
+}
+
+// Review on PR #10: two stacks on one system. Stopping both stacks first, then the system, stops
+// everything; StopStack alone never touches the system.
+func TestTwoStacksShareTheSystem(t *testing.T) {
+	m := &machine{systemUp: true, states: map[string]string{"a-db": "running", "b-db": "running"}}
+	install(t, m)
+	runDetached = func(name string, args ...string) (string, int, error) {
+		m.ran = append(m.ran, name)
+		switch name {
+		case "/x/a-down.sh":
+			m.states["a-db"] = "stopped"
+		case "/x/b-down.sh":
+			m.states["b-db"] = "stopped"
+		}
+		return "", 0, nil
+	}
+	a, b := stackOf("a", "a-db"), stackOf("b", "b-db")
+
+	// One stack alone can't stop the system while the other runs.
+	if _, err := b.Stop(); err == nil || !strings.Contains(err.Error(), "a-db") {
+		t.Fatalf("b.Stop() = %v, want a refusal naming a-db", err)
+	}
+	if ran(m, "container system stop") {
+		t.Fatal("system stopped while a-db ran")
+	}
+
+	// Both stacks first, then the system.
+	if _, err := a.StopStack(); err != nil {
+		t.Fatal(err)
+	}
+	if ran(m, "container system stop") {
+		t.Fatal("StopStack stopped the system")
+	}
+	if stopped, err := b.StopSystem(); !stopped || err != nil {
+		t.Fatalf("b.StopSystem() = %v, %v", stopped, err)
+	}
+	if stopped, err := a.StopSystem(); stopped || err != nil {
+		t.Fatalf("a.StopSystem() after the system stopped = %v, %v; want a no-op", stopped, err)
+	}
+}
+
+func TestStopSystemWithoutStopSystemIsANoOp(t *testing.T) {
+	m := &machine{systemUp: true, states: map[string]string{}}
+	install(t, m)
+	if stopped, err := fizzy(false).StopSystem(); stopped || err != nil || ran(m, "container system stop") {
+		t.Fatalf("StopSystem() = %v, %v; ran %v", stopped, err, m.ran)
+	}
+}

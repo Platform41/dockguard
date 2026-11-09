@@ -411,3 +411,202 @@ func TestStartUsesGuardState(t *testing.T) {
 		t.Fatalf("Run = %d, %v; started = %v", code, err, f.started)
 	}
 }
+
+// stopOrder records the order fakes are stopped in.
+type ordered struct {
+	*fake
+	order *[]string
+}
+
+func (o *ordered) Stop() (bool, error) {
+	*o.order = append(*o.order, o.name)
+	return o.fake.Stop()
+}
+
+// setupOrdered is setup with fakes that record their stop order.
+func setupOrdered(t *testing.T, fakes ...*fake) (*harness, *[]string) {
+	t.Helper()
+	h := setup(t, true, false, fakes...)
+	order := &[]string{}
+	buildTargets = func(cfg config.Config) ([]entry, error) {
+		var entries []entry
+		for i, f := range fakes {
+			entries = append(entries, entry{t: &ordered{fake: f, order: order}, cfg: cfg.Targets[i]})
+		}
+		return entries, nil
+	}
+	return h, order
+}
+
+func TestParseArgsAll(t *testing.T) {
+	if got, err := parseArgs([]string{"stop", "--all", "--eject"}); err != nil || !got.All || !got.Eject {
+		t.Fatalf("parseArgs = %#v, %v", got, err)
+	}
+	for _, args := range [][]string{{"start", "--all"}, {"stop", "docker", "--all"}} {
+		if _, err := parseArgs(args); err == nil {
+			t.Fatalf("parseArgs(%v) error = nil", args)
+		}
+	}
+}
+
+// AS-19: everything running; stop --all --eject stops in reverse config order, then ejects.
+func TestStopAllStopsInReverseOrderThenEjects(t *testing.T) {
+	h, order := setupOrdered(t,
+		&fake{name: "docker", states: states(target.Running, target.Stopped)},
+		&fake{name: "pg", states: states(target.Running, target.Stopped)},
+		&fake{name: "fizzy", states: states(target.Partial, target.Stopped)},
+	)
+
+	code, err := Run([]string{"stop", "--all", "--eject"})
+	if code != 0 || err != nil || !h.ejected {
+		t.Fatalf("Run = %d, %v; ejected = %v\n%s", code, err, h.ejected, h.out)
+	}
+	if got := strings.Join(*order, ","); got != "fizzy,pg,docker" {
+		t.Fatalf("stop order = %s", got)
+	}
+}
+
+func TestStopAllSkipsStoppedTargets(t *testing.T) {
+	h, order := setupOrdered(t,
+		&fake{name: "docker", states: states(target.Stopped)},
+		&fake{name: "pg", states: states(target.Running, target.Stopped)},
+	)
+
+	if code, err := Run([]string{"stop", "--all"}); code != 0 || err != nil || h.ejected {
+		t.Fatalf("Run = %d, %v; ejected = %v", code, err, h.ejected)
+	}
+	if got := strings.Join(*order, ","); got != "pg" {
+		t.Fatalf("stopped %s, want only pg", got)
+	}
+	if !strings.Contains(h.out.String(), "Docker") && !strings.Contains(h.out.String(), "docker is already stopped") {
+		t.Fatalf("output:\n%s", h.out)
+	}
+}
+
+// AS-20: one target fails to stop; the others are still stopped, and the drive isn't ejected.
+func TestStopAllCarriesOnButDoesNotEjectAfterAFailure(t *testing.T) {
+	h, order := setupOrdered(t,
+		&fake{name: "docker", states: states(target.Running, target.Stopped)},
+		&fake{name: "pg", states: states(target.Running), stopErr: errors.New("pg_ctl: server does not shut down")},
+		&fake{name: "fizzy", states: states(target.Running, target.Stopped)},
+	)
+
+	code, err := Run([]string{"stop", "--all", "--eject"})
+	if code != 1 || err == nil || h.ejected {
+		t.Fatalf("Run = %d, %v; ejected = %v", code, err, h.ejected)
+	}
+	if got := strings.Join(*order, ","); got != "fizzy,pg,docker" {
+		t.Fatalf("stop order = %s; the failure should not stop the rest", got)
+	}
+	if !strings.Contains(h.out.String(), "failed to stop: pg") || !strings.Contains(h.out.String(), "Not ejecting") {
+		t.Fatalf("output:\n%s", h.out)
+	}
+}
+
+// AS-30: a target still unknown after stop --all blocks the eject, with the probe error.
+func TestStopAllDoesNotEjectWhileATargetStaysUnknown(t *testing.T) {
+	h, _ := setupOrdered(t,
+		&fake{name: "docker", states: states(target.Running, target.Stopped)},
+		&fake{name: "fizzy", states: states(target.Unknown), stateErr: errors.New("container system status: exit 1, status \"registered\"")},
+	)
+
+	if code, _ := Run([]string{"stop", "--all", "--eject"}); code != 1 || h.ejected {
+		t.Fatalf("code = %d, ejected = %v", code, h.ejected)
+	}
+	if !strings.Contains(h.out.String(), "fizzy: unknown") {
+		t.Fatalf("output:\n%s", h.out)
+	}
+}
+
+// sharedSystem is a fake container system that two stacks run on.
+type sharedSystem struct {
+	up        bool
+	running   map[string]bool // stack name -> its containers running
+	unmanaged bool            // a container outside both stacks is running
+}
+
+// stack is a fake container target with stop_system, on a shared system.
+type stack struct {
+	*fake
+	sys *sharedSystem
+}
+
+func (s *stack) State() (target.State, error) {
+	switch {
+	case s.sys.running[s.name]:
+		return target.Running, nil
+	case s.sys.up:
+		return target.Partial, nil // stop_system: a running system holds the drive
+	default:
+		return target.Stopped, nil
+	}
+}
+
+func (s *stack) StopStack() (bool, error) {
+	was := s.sys.running[s.name]
+	s.sys.running[s.name] = false
+	return was, nil
+}
+
+func (s *stack) StopSystem() (bool, error) {
+	if !s.sys.up {
+		return false, nil
+	}
+	for name, up := range s.sys.running {
+		if up && name != s.name {
+			return false, errors.New("not stopping the container system: other containers are running (" + name + ")")
+		}
+	}
+	if s.sys.unmanaged {
+		return false, errors.New("not stopping the container system: other containers are running (buildkit)")
+	}
+	s.sys.up = false
+	return true, nil
+}
+
+// Stop is the single-target path: stack, then system.
+func (s *stack) Stop() (bool, error) {
+	stopped, _ := s.StopStack()
+	sys, err := s.StopSystem()
+	return stopped || sys, err
+}
+
+func setupStacks(t *testing.T, sys *sharedSystem) *harness {
+	t.Helper()
+	a := &fake{name: "stack-a"}
+	b := &fake{name: "stack-b"}
+	h := setup(t, true, false, a, b)
+	buildTargets = func(cfg config.Config) ([]entry, error) {
+		return []entry{
+			{t: &stack{fake: a, sys: sys}, cfg: cfg.Targets[0]},
+			{t: &stack{fake: b, sys: sys}, cfg: cfg.Targets[1]},
+		}, nil
+	}
+	return h
+}
+
+// Review on PR #10: two stacks share the container system. stop --all stops both stacks first,
+// then the system, so neither stack's shutdown is refused because of the other.
+func TestStopAllStopsSharedSystemAfterEveryStack(t *testing.T) {
+	sys := &sharedSystem{up: true, running: map[string]bool{"stack-a": true, "stack-b": true}}
+	h := setupStacks(t, sys)
+
+	code, err := Run([]string{"stop", "--all", "--eject"})
+	if code != 0 || err != nil || sys.up || !h.ejected {
+		t.Fatalf("Run = %d, %v; system up = %v, ejected = %v\n%s", code, err, sys.up, h.ejected, h.out)
+	}
+}
+
+// Unmanaged containers still protect the shared system.
+func TestStopAllKeepsSystemWhileUnmanagedContainersRun(t *testing.T) {
+	sys := &sharedSystem{up: true, running: map[string]bool{"stack-a": true, "stack-b": true}, unmanaged: true}
+	h := setupStacks(t, sys)
+
+	code, err := Run([]string{"stop", "--all", "--eject"})
+	if code != 1 || err == nil || !sys.up || h.ejected || sys.running["stack-a"] || sys.running["stack-b"] {
+		t.Fatalf("Run = %d, %v; system up = %v, ejected = %v, stacks %v\n%s", code, err, sys.up, h.ejected, sys.running, h.out)
+	}
+	if !strings.Contains(h.out.String(), "buildkit") {
+		t.Fatalf("output should name the unmanaged container:\n%s", h.out)
+	}
+}

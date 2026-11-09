@@ -29,6 +29,7 @@ func PrintUsage() {
 	fmt.Fprintln(Out, "  dockguard check [target] [--config path]")
 	fmt.Fprintln(Out, "  dockguard start [target] [--config path]")
 	fmt.Fprintln(Out, "  dockguard stop [target] [--config path] [--eject]")
+	fmt.Fprintln(Out, "  dockguard stop --all [--config path] [--eject]")
 	fmt.Fprintln(Out, "")
 	fmt.Fprintln(Out, "With no target, check, start and stop act on the target named \"docker\".")
 	fmt.Fprintln(Out, "Config lookup: --config, then ./dockguard.yaml, then ~/.config/dockguard/dockguard.yaml.")
@@ -117,6 +118,21 @@ func PrintStopped(display string) {
 
 func PrintAlreadyStopped(display string) {
 	fmt.Fprintf(Out, "%s is already stopped.\n", display)
+}
+
+// PrintSystemStopped reports a shared system service stopped for a target (stop_system).
+func PrintSystemStopped(display string) {
+	fmt.Fprintf(Out, "%s: container system stop requested.\n", display)
+}
+
+// PrintStopFailed reports a target that couldn't be stopped; stop --all carries on with the rest.
+func PrintStopFailed(display string, err error) {
+	fmt.Fprintf(Out, "%s failed to stop: %v\n", display, err)
+}
+
+// PrintNotEjecting explains a refused eject.
+func PrintNotEjecting(drive, reason string) {
+	fmt.Fprintf(Out, "Not ejecting %s: %s\n", drive, reason)
 }
 
 func PrintEjected(path string) {

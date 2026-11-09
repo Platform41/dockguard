@@ -40,7 +40,7 @@ Format: `dockguard <action> [target] [flags]` (D-006). Every command accepts `--
 | `dockguard start <target>` | Runs the checks, then starts the target only if they pass | 0 if started, else 1 |
 | `dockguard stop <target>` | Stops the target. If it's already stopped, says so and exits 0 | 0, or 1 on error |
 | `dockguard stop <target> --eject` | Stops the target, then ejects the drive only under the eject rule (§2.3) | 0 if ejected, else 1 |
-| `dockguard stop --all [--eject]` | Runs stop for every target that isn't confirmed `stopped` (running, partial or unknown), in reverse config order, then ejects only under the eject rule (§2.3; v0.4.0) | 0 if all stopped (and ejected, if asked), else 1 |
+| `dockguard stop --all [--eject]` | Runs stop for every target that isn't confirmed `stopped` (running, partial or unknown), in reverse config order, then ejects only under the eject rule (§2.3; v0.4.0). Container stacks stop in two passes: every stack's `down` first, then any `stop_system`, so stacks sharing the container system don't block each other; unmanaged containers still block it. | 0 if all stopped (and ejected, if asked), else 1 |
 | `dockguard help` | Usage | 0 |
 
 **Compatibility with v0.1:** `check`, `start` and `stop` with no target mean `docker`. Existing
@@ -95,7 +95,8 @@ DockGuard ejects the drive only when **every configured target is confirmed `sto
 A stop command reporting success isn't enough; only the fresh probe counts. There is no flag to
 override the rule: someone who wants to eject anyway can use Finder or `diskutil`, outside
 DockGuard's guarantee. If the drive is still busy after all targets are stopped (a process outside
-DockGuard's config), the v0.1 busy-volume message and retry still apply.
+DockGuard's config), the v0.1 busy-volume message and retry still apply. When macOS refuses the eject as busy, the message names the processes with files open on the
+drive (from `lsof`), so the user knows what to quit.
 
 ---
 
