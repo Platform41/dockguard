@@ -4,7 +4,7 @@
 **Last Updated:** 2026-11-08
 **Owner:** One
 **Builder:** Three
-**Decisions:** D-005 to D-017 in the [board's decision log](../board/KANBAN.md#decision-log).
+**Decisions:** D-005 to D-018 in the [board's decision log](../board/KANBAN.md#decision-log).
 
 DockGuard runs preflight checks before starting Docker Desktop when Docker's storage is on an
 external SSD. This spec extends the same protection to any application whose data lives on that
@@ -100,6 +100,42 @@ drive (from `lsof`), so the user knows what to quit.
 
 ---
 
+### 2.4 Dashboard: `dockguard ui` (v0.5.0, D-018)
+
+A live terminal dashboard, opened with `dockguard ui`. Bare `dockguard` still prints usage.
+
+```
+─────────────────────────── DockGuard · ExternalSSD ───────────────────────────
+ Drive  /Volumes/ExternalSSD   ● mounted   ▓▓▓▓░░░░░░░░░░  30% used · 685 GB free
+ Eject  ✗ blocked by: xcode (running), fizzy (partial)
+
+ ▌● myapp-db  postgres        running   …/pgdata/myapp
+  ● xcode     app             running   ~/…/DerivedData → drive
+  ◐ fizzy     container       partial   /Volumes/ExternalSSD/container-data
+  ○ docker    docker-desktop  stopped   …/docker-data/DockerDesktop
+
+ ↑/k ↓/j move · s start · x stop · c check · E stop all + eject · r refresh · q quit
+```
+
+- **Drive:** mounted or not, with used space and free space.
+- **Eject line:** `✓ safe to eject` when every target is confirmed `stopped`, otherwise `✗ blocked by:`
+  each target that isn't, with its state. It applies the same rule as §2.3. A long list wraps onto further lines, so every
+  blocker stays visible.
+- **Targets:** in config order, with `●` running, `◐` partial, `○` stopped and `?` unknown (the
+  probe error is shown for the selected target). Refreshed every 3 seconds with the same probes as
+  `list`. Probes and actions never overlap: no probe starts while one is in flight or an action
+  runs, and an action requested during a probe waits for it, then runs, followed by a fresh probe.
+- **Actions** run the same code as the matching commands, so they follow the same rules: `s` is
+  `start <target>` (preflight first), `x` is `stop <target>`, `c` is `check <target>`, and `E` is
+  `stop --all --eject`. `x` and `E` ask for confirmation. The output of the last action, including
+  a refused eject and the processes holding the drive, is shown below the list.
+- Checks only run on `c` or before a start, not on every refresh: the writable check creates a
+  temporary file.
+- If standard input or output isn't a terminal, `ui` exits 1 and points to `list` and `status`.
+- Targets are probed in parallel, so one slow probe doesn't hold up the others.
+- A burst of keys (typed fast or pasted) is handled one key at a time, but stops at a confirmation
+  prompt: a confirmation is always its own key press.
+
 ## 3. Config
 
 Parsed with `gopkg.in/yaml.v3` (D-011), which replaces the hand-written parser.
@@ -184,7 +220,7 @@ Every kind uses the shared checks in §5 and adds its own.
 | Checks | Storage path exists and is writable; free space; settings file exists and points at `storage_path`; not already running (guard) |
 | Start | `docker desktop start` (needs Docker Desktop 4.37+) |
 | Stop | `docker desktop stop` |
-| Running | `docker desktop status` |
+| Running | `docker desktop status`. When no Docker Desktop process exists (`pgrep -f 'Docker\.app/Contents/'` exits 1), Docker is confirmed stopped without the CLI, which waits about 16 seconds before saying Desktop isn't running. Any Desktop process, or a failed process check, falls through to the CLI. |
 
 ### 4.2 `app` (v0.3.0)
 
@@ -403,6 +439,19 @@ release notes, tag after One's review.
   runs Fizzy's `down`, confirms both containers stopped, then ejects.
 - **AS-30** Given a target stays `unknown` after `stop --all`, then the drive isn't ejected and the
   target is named with its probe error.
+
+**v0.5.0**
+
+- **AS-31** Given a terminal, when I run `dockguard ui`, then I see the drive, the eject line and
+  every target with its state, refreshed without pressing anything.
+- **AS-32** Given every target is stopped, then the eject line says it's safe to eject; given one
+  is running, partial or unknown, it names that target instead.
+- **AS-33** Given I press `x` or `E`, then nothing happens until I confirm; pressing anything else
+  cancels.
+- **AS-34** Given I press `E` and a target is still running afterwards, then the drive isn't
+  ejected and the dashboard shows why, as `stop --all --eject` would.
+- **AS-35** Given `dockguard ui` runs without a terminal (for example in a pipe), then it exits 1
+  and suggests `list` and `status`.
 - **AS-19** Given Docker, Postgres and Fizzy are running, when I run `dockguard stop --all
   --eject`, then they stop in reverse config order and the drive is ejected.
 - **AS-20** Given one target fails to stop, then `stop --all --eject` doesn't eject and names the

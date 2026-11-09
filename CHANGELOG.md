@@ -2,6 +2,14 @@
 
 All notable changes to DockGuard are documented in this file.
 
+## [Unreleased] - v0.5.0
+
+### Added
+- `dockguard ui`: a live terminal dashboard showing the drive, whether it's safe to eject, and every target's state. Keys start, stop and check a target, or stop everything and eject, through the same code as the commands; stopping and ejecting ask to confirm (D-018).
+
+### Changed
+- Docker Desktop is confirmed stopped from the process list when none of its processes is running, instead of waiting about 16 seconds for `docker desktop status`. `dockguard list` with Docker stopped went from about 16 s to under 1 s.
+
 ## [v0.4.1] - 2026-11-09
 
 ### Added

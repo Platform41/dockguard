@@ -81,6 +81,8 @@ func Run(args []string) (int, error) {
 		return runList(cfg, entries)
 	case "status":
 		return runStatus(cfg, entries)
+	case "ui":
+		return runDashboard(cfg, entries)
 	}
 	if opts.All {
 		return runStopAll(cfg, entries, opts.Eject)
@@ -105,7 +107,7 @@ func Run(args []string) (int, error) {
 	}
 }
 
-var commands = map[string]bool{"list": true, "status": true, "check": true, "start": true, "stop": true, "help": true, "--help": true, "-h": true}
+var commands = map[string]bool{"ui": true, "list": true, "status": true, "check": true, "start": true, "stop": true, "help": true, "--help": true, "-h": true}
 var takesTarget = map[string]bool{"check": true, "start": true, "stop": true}
 
 func parseArgs(args []string) (options, error) {

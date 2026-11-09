@@ -52,6 +52,13 @@ _None._
 
 ### Review/Test
 
+- [ ] `[v0.5.0] Terminal dashboard: dockguard ui`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** AS-31 to AS-35
+  **Source docs:** `docs/specs/multi-target.md` §2.4, D-018
+  **Branch:** `feat/dashboard`
+
 ### Blocked
 
 - [ ] `[Phase 4] Validate Docker Desktop CLI behavior on target machine`
@@ -307,6 +314,7 @@ _None._
 | D-015 | 2026-11-08 | The config file is the record of which apps DockGuard manages; also look it up at `~/.config/dockguard/dockguard.yaml`, and `list`/`status` print the file used | Azrad | Lands in v0.2.0 |
 | D-016 | 2026-11-08 | Amends D-007: the `brew-service` kind is replaced by a `postgres` kind that runs clusters with `pg_ctl` from a required, version-specific `bin_dir` | Azrad | Was proposal P-3. PostgreSQL here runs with `pg_ctl`, not `brew services`; the `pg_ctl` on the PATH (libpq, v18) differs from the cluster (v17) |
 | D-017 | 2026-11-09 | The `container` kind gets an optional `stop_system` key: stop also runs `container system stop` (refusing while containers outside the stack run), and a running system makes a stopped stack `partial` so it blocks eject. A stopped system means the stack is `stopped` | Azrad | Found while building v0.4.0: `fizzy-down.sh` stops the containers but the container system keeps files open on the drive, and `container list` fails once the system is stopped |
+| D-018 | 2026-11-09 | Add a terminal dashboard, `dockguard ui`: live status of the drive, eject readiness and every target, with start/stop/check and stop-all-and-eject actions that reuse the CLI's code paths; stop and eject ask to confirm. Bare `dockguard` still prints usage | Azrad | Inspired by ONCE's dashboard. A native GUI or menu-bar app stays out of scope |
 
 ---
 

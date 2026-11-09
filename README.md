@@ -83,6 +83,7 @@ DockGuard is not an "images-only offload" tool. It protects a setup where Docker
 
 | Command | Does |
 | --- | --- |
+| `dockguard ui` | Live dashboard: the drive, whether it's safe to eject, and every target's state, with keys to start, stop, check, or stop everything and eject |
 | `dockguard list` | Lists the configured targets with their state (running, partial, stopped or unknown) and path. Runs no checks. |
 | `dockguard status` | Every target's state and checks. Exits 0 when every target is ready. A running target counts as ready; one whose state can't be read doesn't. |
 | `dockguard check [target]` | Runs one target's checks, including the already-running guard |
@@ -98,6 +99,26 @@ seconds for the one it just stopped. It ejects only when every target is confirm
 target that is running, partly running, or whose state can't be read blocks the eject, and DockGuard
 names it. There's no override flag. If macOS still refuses because another process has files open on
 the drive, DockGuard names those processes (for example `Google Chrome (PID 33061)`).
+
+## Dashboard
+
+`dockguard ui` opens a live dashboard in the terminal:
+
+```
+──────────────────────────── DockGuard · ExternalSSD ────────────────────────────
+ Drive  /Volumes/ExternalSSD   ● mounted   ▓▓▓▓░░░░░░░░░░  26% used · 685 GB free
+ Eject  ✗ blocked by: myapp-db (running), myapp-stack (running)
+
+ ▌○ docker       docker-desktop  stopped  …ExternalSSD/docker-data/DockerDesktop
+  ○ xcode        app             stopped  …/Library/Developer/Xcode/DerivedData
+  ● myapp-db     postgres        running  /Volumes/ExternalSSD/pgdata/myapp
+  ● myapp-stack  container       running  /Volumes/ExternalSSD/container-data
+
+ ↑↓ move · s start · x stop · c check · E eject all · r refresh · q quit
+```
+
+It refreshes every 3 seconds. The keys run the same code as the matching commands: `s` start,
+`x` stop, `c` check, `E` stop everything and eject. Stopping and ejecting ask you to confirm.
 
 ## Configuration
 
@@ -245,6 +266,7 @@ dockguard/
 ├── internal/output/
 ├── internal/platform/     # macOS commands (diskutil, open, osascript, pgrep, pg_ctl, container)
 ├── internal/target/       # target interface and kinds
+├── internal/ui/           # the `dockguard ui` dashboard
 └── examples/
 ```
 
