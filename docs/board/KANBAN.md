@@ -52,13 +52,6 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.5.0] Terminal dashboard: dockguard ui`
-  **Owner:** Three
-  **Priority:** P2
-  **Outcome:** AS-31 to AS-35
-  **Source docs:** `docs/specs/multi-target.md` §2.4, D-018
-  **Branch:** `feat/dashboard`
-
 ### Blocked
 
 - [ ] `[Phase 4] Validate Docker Desktop CLI behavior on target machine`
@@ -69,6 +62,22 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.5.0] Release: notes, CHANGELOG, live check, tag`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-11-09
+  **Branch:** `chore/release-v0.5.0` (PR #15)
+  **Deliverable:** `docs/releases/v0.5.0.md`, tag `v0.5.0`
+  **Notes:** Live check by the user with the real config: the dashboard showed the drive, the eject line blocked by the running PostgreSQL cluster and container stack, and every target; `c` ran checks from the dashboard, and the coloured results (PR #16) were confirmed by eye. Also driven through Rex during development, which found the 16 s Docker probe, key bursts and width issues, all fixed in PR #14.
+
+- [x] `[v0.5.0] Terminal dashboard: dockguard ui`
+  **Owner:** Three
+  **Priority:** P2
+  **Outcome:** AS-31 to AS-35
+  **Source docs:** `docs/specs/multi-target.md` §2.4, D-018
+  **Completed:** 2026-11-09
+  **Branch:** `feat/dashboard` (PR #14, merge `5de821f`)
 
 - [x] `[v0.4.0] Release: notes, CHANGELOG, live check, tag`
   **Owner:** One
