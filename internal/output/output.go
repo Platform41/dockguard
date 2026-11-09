@@ -120,6 +120,11 @@ func PrintAlreadyStopped(display string) {
 	fmt.Fprintf(Out, "%s is already stopped.\n", display)
 }
 
+// PrintSystemStopped reports a shared system service stopped for a target (stop_system).
+func PrintSystemStopped(display string) {
+	fmt.Fprintf(Out, "%s: container system stop requested.\n", display)
+}
+
 // PrintStopFailed reports a target that couldn't be stopped; stop --all carries on with the rest.
 func PrintStopFailed(display string, err error) {
 	fmt.Fprintf(Out, "%s failed to stop: %v\n", display, err)

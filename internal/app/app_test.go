@@ -517,3 +517,96 @@ func TestStopAllDoesNotEjectWhileATargetStaysUnknown(t *testing.T) {
 		t.Fatalf("output:\n%s", h.out)
 	}
 }
+
+// sharedSystem is a fake container system that two stacks run on.
+type sharedSystem struct {
+	up        bool
+	running   map[string]bool // stack name -> its containers running
+	unmanaged bool            // a container outside both stacks is running
+}
+
+// stack is a fake container target with stop_system, on a shared system.
+type stack struct {
+	*fake
+	sys *sharedSystem
+}
+
+func (s *stack) State() (target.State, error) {
+	switch {
+	case s.sys.running[s.name]:
+		return target.Running, nil
+	case s.sys.up:
+		return target.Partial, nil // stop_system: a running system holds the drive
+	default:
+		return target.Stopped, nil
+	}
+}
+
+func (s *stack) StopStack() (bool, error) {
+	was := s.sys.running[s.name]
+	s.sys.running[s.name] = false
+	return was, nil
+}
+
+func (s *stack) StopSystem() (bool, error) {
+	if !s.sys.up {
+		return false, nil
+	}
+	for name, up := range s.sys.running {
+		if up && name != s.name {
+			return false, errors.New("not stopping the container system: other containers are running (" + name + ")")
+		}
+	}
+	if s.sys.unmanaged {
+		return false, errors.New("not stopping the container system: other containers are running (buildkit)")
+	}
+	s.sys.up = false
+	return true, nil
+}
+
+// Stop is the single-target path: stack, then system.
+func (s *stack) Stop() (bool, error) {
+	stopped, _ := s.StopStack()
+	sys, err := s.StopSystem()
+	return stopped || sys, err
+}
+
+func setupStacks(t *testing.T, sys *sharedSystem) *harness {
+	t.Helper()
+	a := &fake{name: "stack-a"}
+	b := &fake{name: "stack-b"}
+	h := setup(t, true, false, a, b)
+	buildTargets = func(cfg config.Config) ([]entry, error) {
+		return []entry{
+			{t: &stack{fake: a, sys: sys}, cfg: cfg.Targets[0]},
+			{t: &stack{fake: b, sys: sys}, cfg: cfg.Targets[1]},
+		}, nil
+	}
+	return h
+}
+
+// Review on PR #10: two stacks share the container system. stop --all stops both stacks first,
+// then the system, so neither stack's shutdown is refused because of the other.
+func TestStopAllStopsSharedSystemAfterEveryStack(t *testing.T) {
+	sys := &sharedSystem{up: true, running: map[string]bool{"stack-a": true, "stack-b": true}}
+	h := setupStacks(t, sys)
+
+	code, err := Run([]string{"stop", "--all", "--eject"})
+	if code != 0 || err != nil || sys.up || !h.ejected {
+		t.Fatalf("Run = %d, %v; system up = %v, ejected = %v\n%s", code, err, sys.up, h.ejected, h.out)
+	}
+}
+
+// Unmanaged containers still protect the shared system.
+func TestStopAllKeepsSystemWhileUnmanagedContainersRun(t *testing.T) {
+	sys := &sharedSystem{up: true, running: map[string]bool{"stack-a": true, "stack-b": true}, unmanaged: true}
+	h := setupStacks(t, sys)
+
+	code, err := Run([]string{"stop", "--all", "--eject"})
+	if code != 1 || err == nil || !sys.up || h.ejected || sys.running["stack-a"] || sys.running["stack-b"] {
+		t.Fatalf("Run = %d, %v; system up = %v, ejected = %v, stacks %v\n%s", code, err, sys.up, h.ejected, sys.running, h.out)
+	}
+	if !strings.Contains(h.out.String(), "buildkit") {
+		t.Fatalf("output should name the unmanaged container:\n%s", h.out)
+	}
+}

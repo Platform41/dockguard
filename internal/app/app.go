@@ -336,8 +336,19 @@ func runStop(cfg config.Config, entries []entry, e entry, eject bool) (int, erro
 	return ejectIfAllStopped(cfg, entries, justStopped)
 }
 
+// sharedSystemStopper is implemented by targets that run on a shared system service (container
+// stacks). stop --all stops every stack before any system, so stacks don't block each other.
+type sharedSystemStopper interface {
+	StopStack() (bool, error)
+	StopSystem() (bool, error)
+}
+
+// Container stacks must take the two-pass path; this fails to compile if they stop doing so.
+var _ sharedSystemStopper = (*containerkind.Target)(nil)
+
 // runStopAll stops every target that isn't confirmed stopped (running, partial or unknown), in
-// reverse config order, and keeps going when one fails. Any failure means no eject (spec §2).
+// reverse config order, and keeps going when one fails. Shared system services are stopped in a
+// second pass, after every target. Any failure means no eject (spec §2).
 func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
 	justStopped := map[string]bool{}
 	var failed []string
@@ -348,7 +359,11 @@ func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
 			output.PrintAlreadyStopped(display(e))
 			continue
 		}
-		stopRequested, err := e.t.Stop()
+		stop := e.t.Stop
+		if s, ok := e.t.(sharedSystemStopper); ok {
+			stop = s.StopStack
+		}
+		stopRequested, err := stop()
 		switch {
 		case err != nil:
 			output.PrintStopFailed(display(e), err)
@@ -358,6 +373,29 @@ func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
 			justStopped[e.t.Name()] = true
 		default:
 			output.PrintAlreadyStopped(display(e))
+		}
+	}
+
+	// Second pass: every managed stack is down now, so only unmanaged containers can still stop a
+	// shared system from shutting down. A stack that failed above is skipped.
+	failedSet := map[string]bool{}
+	for _, name := range failed {
+		failedSet[name] = true
+	}
+	for i := len(entries) - 1; i >= 0; i-- {
+		e := entries[i]
+		s, ok := e.t.(sharedSystemStopper)
+		if !ok || failedSet[e.t.Name()] {
+			continue
+		}
+		stopped, err := s.StopSystem()
+		switch {
+		case err != nil:
+			output.PrintStopFailed(display(e), err)
+			failed = append(failed, e.t.Name())
+		case stopped:
+			output.PrintSystemStopped(display(e))
+			justStopped[e.t.Name()] = true
 		}
 	}
 

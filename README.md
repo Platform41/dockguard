@@ -82,7 +82,7 @@ DockGuard is not an "images-only offload" tool. It protects a setup where Docker
 | `dockguard check [target]` | Runs one target's checks, including the already-running guard |
 | `dockguard start [target]` | Runs the checks, then starts the target only if they all pass |
 | `dockguard stop [target] [--eject]` | Stops the target; with `--eject`, ejects the drive under the eject rule below |
-| `dockguard stop --all [--eject]` | Stops every target that isn't confirmed stopped, in reverse config order, carrying on past failures; ejects only if all stopped |
+| `dockguard stop --all [--eject]` | Stops every target that isn't confirmed stopped, in reverse config order, carrying on past failures; container systems (`stop_system`) last, after every stack; ejects only if all stopped |
 
 With no target, `check`, `start` and `stop` act on the target named `docker`, so v0.1 commands keep
 working. Every command accepts `--config <path>`.

@@ -40,7 +40,7 @@ Format: `dockguard <action> [target] [flags]` (D-006). Every command accepts `--
 | `dockguard start <target>` | Runs the checks, then starts the target only if they pass | 0 if started, else 1 |
 | `dockguard stop <target>` | Stops the target. If it's already stopped, says so and exits 0 | 0, or 1 on error |
 | `dockguard stop <target> --eject` | Stops the target, then ejects the drive only under the eject rule (§2.3) | 0 if ejected, else 1 |
-| `dockguard stop --all [--eject]` | Runs stop for every target that isn't confirmed `stopped` (running, partial or unknown), in reverse config order, then ejects only under the eject rule (§2.3; v0.4.0) | 0 if all stopped (and ejected, if asked), else 1 |
+| `dockguard stop --all [--eject]` | Runs stop for every target that isn't confirmed `stopped` (running, partial or unknown), in reverse config order, then ejects only under the eject rule (§2.3; v0.4.0). Container stacks stop in two passes: every stack's `down` first, then any `stop_system`, so stacks sharing the container system don't block each other; unmanaged containers still block it. | 0 if all stopped (and ejected, if asked), else 1 |
 | `dockguard help` | Usage | 0 |
 
 **Compatibility with v0.1:** `check`, `start` and `stop` with no target mean `docker`. Existing
