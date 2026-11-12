@@ -44,6 +44,17 @@
 
 ### Backlog
 
+- [ ] `[v0.5.1] Proactive eject readiness includes processes holding the drive`
+  **Owner:** Three
+  **Priority:** P1
+  **Status:** Proposed; sponsor decision pending
+  **Outcome:** The dashboard says `safe to eject` only when configured targets are stopped and a
+  fresh holder scan finds no process using the drive. Eject preflights holders before `diskutil`
+  and retains its post-failure rescan for races.
+  **Proposal:** `docs/specs/proactive-eject-readiness.md` (AS-36 to AS-45)
+  **Found from live use:** A `zsh` current directory on the T7 blocked Finder eject while DockGuard
+  had no proactive process-holder state.
+
 ### This Week
 
 ### Doing
