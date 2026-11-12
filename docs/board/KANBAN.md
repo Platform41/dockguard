@@ -67,7 +67,7 @@ _None._
   **Owner:** One
   **Priority:** P1
   **Completed:** 2026-11-12
-  **Branch:** `chore/release-v0.5.1`
+  **Branch:** `chore/release-v0.5.1` (PR #19)
   **Deliverable:** `docs/releases/v0.5.1.md`, tag `v0.5.1`
   **Notes:** Release review reran the full Go suite, race suite and `go vet` from merged master.
   No config or command syntax changed.
