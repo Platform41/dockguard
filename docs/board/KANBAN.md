@@ -46,6 +46,17 @@
 
 ### This Week
 
+- [ ] `[v0.5.1] Proactive eject readiness includes processes holding the drive`
+  **Owner:** Three
+  **Priority:** P1
+  **Status:** Approved by Azrad, 2026-11-12; ready for implementation
+  **Outcome:** The dashboard says `safe to eject` only when configured targets are stopped and a
+  fresh holder scan finds no process using the drive. Eject preflights holders before `diskutil`
+  and retains its post-failure rescan for races.
+  **Proposal:** `docs/specs/proactive-eject-readiness.md` (AS-36 to AS-45)
+  **Found from live use:** A `zsh` current directory on the T7 blocked Finder eject while DockGuard
+  had no proactive process-holder state.
+
 ### Doing
 
 _None._
@@ -324,6 +335,7 @@ _None._
 | D-016 | 2026-11-08 | Amends D-007: the `brew-service` kind is replaced by a `postgres` kind that runs clusters with `pg_ctl` from a required, version-specific `bin_dir` | Azrad | Was proposal P-3. PostgreSQL here runs with `pg_ctl`, not `brew services`; the `pg_ctl` on the PATH (libpq, v18) differs from the cluster (v17) |
 | D-017 | 2026-11-09 | The `container` kind gets an optional `stop_system` key: stop also runs `container system stop` (refusing while containers outside the stack run), and a running system makes a stopped stack `partial` so it blocks eject. A stopped system means the stack is `stopped` | Azrad | Found while building v0.4.0: `fizzy-down.sh` stops the containers but the container system keeps files open on the drive, and `container list` fails once the system is stopped |
 | D-018 | 2026-11-09 | Add a terminal dashboard, `dockguard ui`: live status of the drive, eject readiness and every target, with start/stop/check and stop-all-and-eject actions that reuse the CLI's code paths; stop and eject ask to confirm. Bare `dockguard` still prints usage | Azrad | Inspired by ONCE's dashboard. A native GUI or menu-bar app stays out of scope |
+| D-019 | 2026-11-12 | Eject readiness requires every configured target stopped and a fresh process-holder scan with no holders; inspection failure is unknown, not safe. Dashboard snapshots and eject preflight scan holders; other commands remain unchanged | Azrad | Approved after a live `zsh` current-directory hold prevented T7 eject while the dashboard had no proactive holder state. Spec: `docs/specs/proactive-eject-readiness.md` |
 
 ---
 
