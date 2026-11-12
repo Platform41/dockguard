@@ -1,10 +1,14 @@
 package platform
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Holder is a process with files open on a volume.
@@ -15,8 +19,28 @@ type Holder struct {
 
 func (h Holder) String() string { return fmt.Sprintf("%s (PID %d)", h.Name, h.PID) }
 
+// HolderScanTimeout keeps a dashboard refresh bounded below its three-second interval.
+var HolderScanTimeout = 2 * time.Second
+
 // Swappable for tests.
-var runLsof = Run
+var runLsof = runLsofWithTimeout
+
+func runLsofWithTimeout(name string, args ...string) (output string, code int, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), HolderScanTimeout)
+	defer cancel()
+	out, runErr := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	if ctx.Err() != nil {
+		return string(out), -1, fmt.Errorf("%s timed out after %s", name, HolderScanTimeout)
+	}
+	if runErr == nil {
+		return string(out), 0, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		return string(out), exitErr.ExitCode(), nil
+	}
+	return string(out), -1, runErr
+}
 
 // Holders lists the processes with files open on the volume mounted at mountPath, using lsof's
 // field output. lsof exits 1 when it finds nothing, which is an empty list, not an error.
@@ -28,7 +52,11 @@ func Holders(mountPath string) ([]Holder, error) {
 	if code != 0 && strings.TrimSpace(output) == "" {
 		return nil, nil
 	}
-	return parseLsof(output), nil
+	holders := parseLsof(output)
+	if code != 0 || strings.Contains(output, "lsof:") {
+		return holders, fmt.Errorf("lsof inspection incomplete: %s", strings.TrimSpace(output))
+	}
+	return holders, nil
 }
 
 // parseLsof reads "p<pid>" and "c<command>" lines; other fields (such as "f<fd>") are ignored.
@@ -76,3 +104,6 @@ func describeHolders(holders []Holder) string {
 	}
 	return strings.Join(names, ", ")
 }
+
+// DescribeHolders formats holders for app and platform error messages.
+func DescribeHolders(holders []Holder) string { return describeHolders(holders) }

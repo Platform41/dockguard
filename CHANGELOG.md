@@ -2,6 +2,13 @@
 
 All notable changes to DockGuard are documented in this file.
 
+## [v0.5.1] - 2026-11-12
+
+### Fixed
+- The dashboard now includes processes holding the external drive in eject readiness, so a shell current directory, Finder/Quick Look or another unmanaged process cannot coexist with a `safe to eject` claim.
+- `stop --eject` and `stop --all --eject` inspect holders before `diskutil`, fail closed when inspection is unavailable, and retain the post-failure scan for races.
+- The dashboard releases its own inherited current-directory hold before scanning while continuing to report the parent shell as a real blocker.
+
 ## [v0.5.0] - 2026-11-09
 
 ### Added
@@ -82,6 +89,7 @@ All notable changes to DockGuard are documented in this file.
 ### Fixed
 - Fixed Docker Desktop settings path matching to support case-insensitive keys such as `DataFolder`.
 
+[v0.5.1]: https://github.com/platform41/dockguard/compare/v0.5.0...v0.5.1
 [v0.5.0]: https://github.com/platform41/dockguard/compare/v0.4.1...v0.5.0
 [v0.4.1]: https://github.com/platform41/dockguard/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/platform41/dockguard/compare/v0.3.0...v0.4.0

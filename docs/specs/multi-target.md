@@ -92,11 +92,11 @@ DockGuard ejects the drive only when **every configured target is confirmed `sto
 3. Eject only if every target is now `stopped`. Otherwise refuse, exit 1, and list each target
    that blocked the eject with its state and, for `unknown`, the probe error.
 
-A stop command reporting success isn't enough; only the fresh probe counts. There is no flag to
-override the rule: someone who wants to eject anyway can use Finder or `diskutil`, outside
-DockGuard's guarantee. If the drive is still busy after all targets are stopped (a process outside
-DockGuard's config), the v0.1 busy-volume message and retry still apply. When macOS refuses the eject as busy, the message names the processes with files open on the
-drive (from `lsof`), so the user knows what to quit.
+A stop command reporting success isn't enough; only the fresh probe counts. From v0.5.1 (D-019),
+the positive readiness state also requires a fresh process-holder scan with no holders. DockGuard
+refuses before `diskutil` when a process is using the drive or inspection fails, and retains the
+post-failure scan for a process that opens the drive between preflight and eject. Full behaviour:
+[`proactive-eject-readiness.md`](proactive-eject-readiness.md). There is no override flag.
 
 ---
 
@@ -118,9 +118,10 @@ A live terminal dashboard, opened with `dockguard ui`. Bare `dockguard` still pr
 ```
 
 - **Drive:** mounted or not, with used space and free space.
-- **Eject line:** `✓ safe to eject` when every target is confirmed `stopped`, otherwise `✗ blocked by:`
-  each target that isn't, with its state. It applies the same rule as §2.3. A long list wraps onto further lines, so every
-  blocker stays visible.
+- **Eject line:** `✓ safe to eject` only when every target is confirmed `stopped` and the fresh
+  process-holder scan is complete and empty. Otherwise it names target and process blockers, or
+  reports readiness unknown when inspection fails. It applies the same rule as §2.3. A long list
+  wraps onto further lines, so every blocker stays visible.
 - **Targets:** in config order, with `●` running, `◐` partial, `○` stopped and `?` unknown (the
   probe error is shown for the selected target). Refreshed every 3 seconds with the same probes as
   `list`. Probes and actions never overlap: no probe starts while one is in flight or an action

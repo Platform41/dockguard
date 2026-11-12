@@ -27,6 +27,7 @@ var (
 	buildTargets = defaultBuildTargets
 	driveMounted = checks.DriveMounted
 	ejectVolume  = platform.EjectVolume
+	holdersOf    = platform.Holders
 	sleep        = time.Sleep
 	now          = time.Now
 )
@@ -437,6 +438,24 @@ func ejectIfAllStopped(cfg config.Config, entries []entry, justStopped map[strin
 
 	if len(blockers) > 0 {
 		output.PrintEjectRefused(cfg.Drive, blockers)
+		return 1, errors.New("drive not ejected")
+	}
+
+	if err := releaseDriveCWD(cfg.Drive); err != nil {
+		output.PrintNotEjecting(cfg.Drive, err.Error())
+		return 1, errors.New("drive not ejected")
+	}
+	holders, holderErr := holdersOf(cfg.Drive)
+	if len(holders) > 0 {
+		reason := "still using the drive: " + platform.DescribeHolders(holders)
+		if holderErr != nil {
+			reason += "; process inspection incomplete: " + holderErr.Error()
+		}
+		output.PrintNotEjecting(cfg.Drive, reason)
+		return 1, errors.New("drive not ejected")
+	}
+	if holderErr != nil {
+		output.PrintNotEjecting(cfg.Drive, "couldn't inspect processes using the drive: "+holderErr.Error())
 		return 1, errors.New("drive not ejected")
 	}
 

@@ -1,0 +1,29 @@
+task: proactive-eject-readiness
+date: 2026-11-12
+persona: Three
+workflow: bug-fix@0.1
+task_class: bug
+risk: medium
+risk_reasons:
+  - Changes the safety predicate and eject path for an external volume.
+  - Does not terminate processes, force eject, or change stored data.
+approved_input: docs/specs/proactive-eject-readiness.md
+decision: D-019
+base: 8d1bc5d
+branch: feat/proactive-eject-readiness
+root_cause: Dashboard readiness covered configured targets only; holder inspection ran only after diskutil failed.
+implementation:
+  - Scan holders concurrently with dashboard target probes with a two-second timeout.
+  - Require a complete empty holder scan for positive readiness.
+  - Preflight holders before diskutil and retain post-failure diagnosis for races.
+  - Release DockGuard's inherited drive working directory while reporting the parent shell.
+validation:
+  unit_suite: pass
+  race_suite: pass
+  go_vet: pass
+  live_dashboard: pass — T7 showed zsh PID 23721 alongside managed target blockers; holder scan took 0.14 seconds.
+  destructive_eject_test: not run against the user's mounted T7; command sequencing is covered by injected tests.
+  staging: N/A
+completion_status: complete
+architecture_decision_required: false
+knowledge_candidates: []

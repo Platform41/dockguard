@@ -44,10 +44,21 @@ func EjectVolume(mountPath string) error {
 	}
 
 	// Name what's holding the drive when lsof can tell; otherwise fall back to general advice.
-	if holders, err := holdersOf(mountPath); err == nil && len(holders) > 0 {
+	holders, scanErr := holdersOf(mountPath)
+	if len(holders) > 0 {
+		warning := ""
+		if scanErr != nil {
+			warning = "\nholder inspection warning: " + scanErr.Error()
+		}
 		return fmt.Errorf(
-			"eject external mount %q failed after %d attempts: %w\nvolume is busy; still using the drive: %s\nquit those (or close their files on the drive), then retry",
-			mountPath, maxAttempts, lastErr, describeHolders(holders),
+			"eject external mount %q failed after %d attempts: %w\nvolume is busy; still using the drive: %s%s\nquit those (or close their files on the drive), then retry",
+			mountPath, maxAttempts, lastErr, describeHolders(holders), warning,
+		)
+	}
+	if scanErr != nil {
+		return fmt.Errorf(
+			"eject external mount %q failed after %d attempts: %w\nvolume is busy; couldn't inspect processes using the drive: %v",
+			mountPath, maxAttempts, lastErr, scanErr,
 		)
 	}
 	return fmt.Errorf(
