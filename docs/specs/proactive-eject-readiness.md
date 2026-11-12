@@ -1,6 +1,6 @@
 # Proposal — Proactive Eject Readiness
 
-**Status:** Proposed
+**Status:** Approved by Azrad, 2026-11-12
 **Target:** v0.5.1
 **Owner:** One
 **Builder:** Three
@@ -179,9 +179,9 @@ fresh process-holder scan. Update the README's eject rule and dashboard example,
 patch release because this corrects an unsafe/misleading readiness claim without changing target
 configuration or command syntax.
 
-## 9. Decision requested
+## 9. Approved decision
 
-Approve this proposal for `v0.5.1`, including:
+Approved for `v0.5.1`:
 
 1. proactive holder inspection in dashboard snapshots and immediately before eject;
 2. fail-closed readiness when holder inspection is unavailable;
