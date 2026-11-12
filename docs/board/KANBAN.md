@@ -52,17 +52,6 @@ _None._
 
 ### Review/Test
 
-- [ ] `[v0.5.1] Proactive eject readiness includes processes holding the drive`
-  **Owner:** Three
-  **Priority:** P1
-  **Status:** Implemented; release review pending
-  **Outcome:** The dashboard says `safe to eject` only when configured targets are stopped and a
-  fresh holder scan finds no process using the drive. Eject preflights holders before `diskutil`
-  and retains its post-failure rescan for races.
-  **Proposal:** `docs/specs/proactive-eject-readiness.md` (AS-36 to AS-45)
-  **Evidence:** Full Go and race suites pass; `go vet` passes; live T7 dashboard named `zsh`
-  PID 23721 as a holder. Execution record: `docs/execution-records/proactive-eject-readiness.yaml`.
-
 ### Blocked
 
 - [ ] `[Phase 4] Validate Docker Desktop CLI behavior on target machine`
@@ -73,6 +62,26 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.5.1] Release: proactive eject readiness`
+  **Owner:** One
+  **Priority:** P1
+  **Completed:** 2026-11-12
+  **Branch:** `chore/release-v0.5.1` (PR #19)
+  **Deliverable:** `docs/releases/v0.5.1.md`, tag `v0.5.1`
+  **Notes:** Release review reran the full Go suite, race suite and `go vet` from merged master.
+  No config or command syntax changed.
+
+- [x] `[v0.5.1] Proactive eject readiness includes processes holding the drive`
+  **Owner:** Three
+  **Priority:** P1
+  **Completed:** 2026-11-12
+  **Branch:** `feat/proactive-eject-readiness` (PR #18, merge `d148abc`)
+  **Outcome:** The dashboard says `safe to eject` only when configured targets are stopped and a
+  fresh holder scan finds no process using the drive. Eject preflights holders before `diskutil`
+  and retains its post-failure rescan for races.
+  **Evidence:** Full Go and race suites pass; `go vet` passes; live T7 dashboard named `zsh`
+  PID 23721 as a holder. Execution record: `docs/execution-records/proactive-eject-readiness.yaml`.
 
 - [x] `[v0.5.0] Release: notes, CHANGELOG, live check, tag`
   **Owner:** One
