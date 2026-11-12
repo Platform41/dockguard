@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -17,6 +19,8 @@ import (
 var (
 	isTerminal = stdioIsTerminal
 	runUI      = ui.Run
+	getwd      = os.Getwd
+	chdir      = os.Chdir
 )
 
 // runDashboard opens `dockguard ui` (spec §2.4). Outside a terminal it refuses (AS-35).
@@ -24,10 +28,33 @@ func runDashboard(cfg config.Config, entries []entry) (int, error) {
 	if !isTerminal() {
 		return 1, errors.New("dockguard ui needs a terminal; use `dockguard list` or `dockguard status` instead")
 	}
+	if err := releaseDriveCWD(cfg.Drive); err != nil {
+		return 1, err
+	}
 	if err := runUI(&controller{cfg: cfg, entries: entries}); err != nil {
 		return 1, err
 	}
 	return 0, nil
+}
+
+// releaseDriveCWD prevents DockGuard itself from holding the drive open. Config is fully loaded
+// before this runs; configured paths are absolute.
+func releaseDriveCWD(drive string) error {
+	cwd, err := getwd()
+	if err != nil {
+		return fmt.Errorf("inspect DockGuard working directory: %w", err)
+	}
+	rel, err := filepath.Rel(filepath.Clean(drive), filepath.Clean(cwd))
+	if err != nil {
+		return fmt.Errorf("compare DockGuard working directory with %s: %w", drive, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil
+	}
+	if err := chdir("/"); err != nil {
+		return fmt.Errorf("release dashboard working directory on %s: %w; relaunch DockGuard from outside the drive", drive, err)
+	}
+	return nil
 }
 
 func stdioIsTerminal() bool {
@@ -57,6 +84,19 @@ func (c *controller) Snapshot() ui.Snapshot {
 	// Probe every target at once, so one slow probe doesn't hold up the others.
 	s.Rows = make([]ui.Row, len(c.entries))
 	var wg sync.WaitGroup
+	if s.Mounted {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			holders, err := holdersOf(c.cfg.Drive)
+			for _, h := range holders {
+				s.Holders = append(s.Holders, ui.Holder{Name: h.Name, PID: h.PID})
+			}
+			if err != nil {
+				s.HolderErr = err.Error()
+			}
+		}()
+	}
 	for i, e := range c.entries {
 		s.Rows[i] = ui.Row{Name: e.t.Name(), Kind: e.t.Kind(), Path: e.t.MainPath()}
 		if !s.Mounted {

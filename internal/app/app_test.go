@@ -11,6 +11,7 @@ import (
 	"github.com/platform41/dockguard/internal/checks"
 	"github.com/platform41/dockguard/internal/config"
 	"github.com/platform41/dockguard/internal/output"
+	"github.com/platform41/dockguard/internal/platform"
 	"github.com/platform41/dockguard/internal/target"
 	"github.com/platform41/dockguard/internal/ui"
 )
@@ -88,16 +89,20 @@ func setup(t *testing.T, mounted bool, legacy bool, fakes ...*fake) *harness {
 	}
 
 	orig := struct {
-		load   func(string) (config.Config, error)
-		build  func(config.Config) ([]entry, error)
-		mount  func(string) bool
-		eject  func(string) error
-		sleep  func(time.Duration)
-		now    func() time.Time
-		output io.Writer
-	}{loadConfig, buildTargets, driveMounted, ejectVolume, sleep, now, output.Out}
+		load    func(string) (config.Config, error)
+		build   func(config.Config) ([]entry, error)
+		mount   func(string) bool
+		eject   func(string) error
+		holders func(string) ([]platform.Holder, error)
+		sleep   func(time.Duration)
+		now     func() time.Time
+		output  io.Writer
+	}{
+		load: loadConfig, build: buildTargets, mount: driveMounted, eject: ejectVolume,
+		holders: holdersOf, sleep: sleep, now: now, output: output.Out,
+	}
 	t.Cleanup(func() {
-		loadConfig, buildTargets, driveMounted, ejectVolume, sleep, now = orig.load, orig.build, orig.mount, orig.eject, orig.sleep, orig.now
+		loadConfig, buildTargets, driveMounted, ejectVolume, holdersOf, sleep, now = orig.load, orig.build, orig.mount, orig.eject, orig.holders, orig.sleep, orig.now
 		output.Out = orig.output
 	})
 
@@ -106,6 +111,7 @@ func setup(t *testing.T, mounted bool, legacy bool, fakes ...*fake) *harness {
 	buildTargets = func(config.Config) ([]entry, error) { return entries, nil }
 	driveMounted = func(string) bool { return mounted }
 	ejectVolume = func(string) error { h.ejected = true; return nil }
+	holdersOf = func(string) ([]platform.Holder, error) { return nil, nil }
 	sleep = func(d time.Duration) { h.slept += d; clock = clock.Add(d) }
 	now = func() time.Time { return clock }
 	output.Out = h.out
@@ -274,6 +280,32 @@ func TestStopEjectsWhenEverythingIsConfirmedStopped(t *testing.T) {
 
 	code, err := Run([]string{"stop", "--eject"})
 	if code != 0 || err != nil || !h.ejected {
+		t.Fatalf("Run = %d, %v; ejected = %v\n%s", code, err, h.ejected, h.out)
+	}
+}
+
+// AS-41: known process holders prevent diskutil from being called.
+func TestStopEjectRefusesKnownProcessHolder(t *testing.T) {
+	docker := &fake{name: "docker", states: states(target.Stopped)}
+	h := setup(t, true, false, docker)
+	holdersOf = func(string) ([]platform.Holder, error) {
+		return []platform.Holder{{Name: "zsh", PID: 23721}}, nil
+	}
+
+	code, err := Run([]string{"stop", "--eject"})
+	if code != 1 || err == nil || h.ejected || !strings.Contains(h.out.String(), "zsh (PID 23721)") {
+		t.Fatalf("Run = %d, %v; ejected = %v\n%s", code, err, h.ejected, h.out)
+	}
+}
+
+// AS-39: an incomplete holder scan is unknown and blocks eject.
+func TestStopEjectRefusesHolderInspectionFailure(t *testing.T) {
+	docker := &fake{name: "docker", states: states(target.Stopped)}
+	h := setup(t, true, false, docker)
+	holdersOf = func(string) ([]platform.Holder, error) { return nil, errors.New("lsof timed out") }
+
+	code, err := Run([]string{"stop", "--eject"})
+	if code != 1 || err == nil || h.ejected || !strings.Contains(h.out.String(), "lsof timed out") {
 		t.Fatalf("Run = %d, %v; ejected = %v\n%s", code, err, h.ejected, h.out)
 	}
 }
@@ -638,6 +670,52 @@ func TestUIOpensTheDashboardWithAController(t *testing.T) {
 	}
 	if !got.Mounted || len(got.Rows) != 1 || got.Rows[0].State != target.Running {
 		t.Fatalf("snapshot = %#v", got)
+	}
+}
+
+func TestDashboardSnapshotIncludesHolders(t *testing.T) {
+	setup(t, true, false, &fake{name: "docker", states: states(target.Stopped)})
+	holdersOf = func(string) ([]platform.Holder, error) {
+		return []platform.Holder{{Name: "zsh", PID: 23721}}, errors.New("inspection incomplete")
+	}
+	cfg, _ := loadConfig("")
+	entries, _ := buildTargets(cfg)
+
+	got := (&controller{cfg: cfg, entries: entries}).Snapshot()
+	if len(got.Holders) != 1 || got.Holders[0] != (ui.Holder{Name: "zsh", PID: 23721}) ||
+		!strings.Contains(got.HolderErr, "inspection incomplete") {
+		t.Fatalf("snapshot = %#v", got)
+	}
+}
+
+func TestDashboardSnapshotSkipsHoldersWhenDriveIsUnmounted(t *testing.T) {
+	setup(t, false, false, &fake{name: "docker", noProbing: true})
+	called := false
+	holdersOf = func(string) ([]platform.Holder, error) { called = true; return nil, nil }
+	cfg, _ := loadConfig("")
+	entries, _ := buildTargets(cfg)
+
+	got := (&controller{cfg: cfg, entries: entries}).Snapshot()
+	if called || got.Mounted {
+		t.Fatalf("holder scan called = %v, snapshot = %#v", called, got)
+	}
+}
+
+func TestReleaseDriveCWDOnlyWhenInsideDrive(t *testing.T) {
+	origGetwd, origChdir := getwd, chdir
+	t.Cleanup(func() { getwd, chdir = origGetwd, origChdir })
+	var changedTo string
+	chdir = func(path string) error { changedTo = path; return nil }
+
+	getwd = func() (string, error) { return "/Volumes/X/projects/app", nil }
+	if err := releaseDriveCWD("/Volumes/X"); err != nil || changedTo != "/" {
+		t.Fatalf("inside: changed to %q, err %v", changedTo, err)
+	}
+
+	changedTo = ""
+	getwd = func() (string, error) { return "/Volumes/X-other", nil }
+	if err := releaseDriveCWD("/Volumes/X"); err != nil || changedTo != "" {
+		t.Fatalf("sibling: changed to %q, err %v", changedTo, err)
 	}
 }
 

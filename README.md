@@ -95,10 +95,11 @@ With no target, `check`, `start` and `stop` act on the target named `docker`, so
 working. Every command accepts `--config <path>`.
 
 **Eject rule.** After stopping, DockGuard checks every configured target again, waiting up to 30
-seconds for the one it just stopped. It ejects only when every target is confirmed stopped. A
-target that is running, partly running, or whose state can't be read blocks the eject, and DockGuard
-names it. There's no override flag. If macOS still refuses because another process has files open on
-the drive, DockGuard names those processes (for example `Google Chrome (PID 33061)`).
+seconds for the one it just stopped. It ejects only when every target is confirmed stopped and a
+fresh process scan finds nothing else using the drive. A running, partial or unknown target blocks
+the eject. A shell whose current directory is on the drive, Finder/Quick Look or another process
+also blocks it and is named (for example `zsh (PID 23721)`). If the process scan fails, readiness is
+unknown and DockGuard refuses the eject. There's no override flag.
 
 ## Dashboard
 
@@ -107,7 +108,7 @@ the drive, DockGuard names those processes (for example `Google Chrome (PID 3306
 ```
 ──────────────────────────── DockGuard · ExternalSSD ────────────────────────────
  Drive  /Volumes/ExternalSSD   ● mounted   ▓▓▓▓░░░░░░░░░░  26% used · 685 GB free
- Eject  ✗ blocked by: myapp-db (running), myapp-stack (running)
+ Eject  ✗ blocked by: myapp-db (running), zsh (PID 23721, using drive)
 
  ▌○ docker       docker-desktop  stopped  …ExternalSSD/docker-data/DockerDesktop
   ○ xcode        app             stopped  …/Library/Developer/Xcode/DerivedData
@@ -117,8 +118,10 @@ the drive, DockGuard names those processes (for example `Google Chrome (PID 3306
  ↑↓ move · s start · x stop · c check · E eject all · r refresh · q quit
 ```
 
-It refreshes every 3 seconds. The keys run the same code as the matching commands: `s` start,
-`x` stop, `c` check, `E` stop everything and eject. Stopping and ejecting ask you to confirm.
+It refreshes target and process-holder state every 3 seconds. `safe to eject` means both checks
+passed; failure to inspect holders is shown as unknown. The keys run the same code as the matching
+commands: `s` start, `x` stop, `c` check, `E` stop everything and eject. Stopping and ejecting ask
+you to confirm.
 
 ## Configuration
 
@@ -251,8 +254,8 @@ refuses (and names them) while containers outside the stack are running.
 - Storage path missing or not on the drive: confirm Docker Desktop's disk image location.
 - Free space below threshold: lower `minimum_free_space_gb` or free space on the SSD.
 - Docker already running: stop Docker Desktop or set `fail_if_already_running: false`.
-- Drive not ejected: `dockguard list` shows which target is still running or in an unknown state.
-- Drive busy: the eject message names the processes holding the drive; quit them and retry.
+- Drive not ejected: the dashboard shows configured target blockers and processes using the drive.
+- Drive busy: quit the named process or move its terminal out of the drive with `cd ~`, then retry.
 
 ## Project Layout
 

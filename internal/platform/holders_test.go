@@ -39,6 +39,31 @@ func TestHoldersUsesFieldOutputWithFullNames(t *testing.T) {
 	}
 }
 
+func TestHoldersReturnsParsedProcessesAndInspectionError(t *testing.T) {
+	original := runLsof
+	t.Cleanup(func() { runLsof = original })
+	runLsof = func(string, ...string) (string, int, error) {
+		return "lsof: WARNING: incomplete results\np42\nczsh\nfcwd\n", 1, nil
+	}
+
+	holders, err := Holders("/Volumes/X")
+	if len(holders) != 1 || holders[0] != (Holder{"zsh", 42}) || err == nil ||
+		!strings.Contains(err.Error(), "incomplete results") {
+		t.Fatalf("Holders = %#v, %v", holders, err)
+	}
+}
+
+func TestLsofScanTimesOut(t *testing.T) {
+	original := HolderScanTimeout
+	t.Cleanup(func() { HolderScanTimeout = original })
+	HolderScanTimeout = 10 * time.Millisecond
+
+	if _, _, err := runLsofWithTimeout("sh", "-c", "sleep 1"); err == nil ||
+		!strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("timeout error = %v", err)
+	}
+}
+
 // The v0.3.0 live check: a busy eject now names what holds the drive.
 func TestEjectVolumeNamesHoldersWhenBusy(t *testing.T) {
 	origLook, origRun, origSleep, origHolders := lookPath, runCommand, sleep, holdersOf
@@ -59,5 +84,11 @@ func TestEjectVolumeNamesHoldersWhenBusy(t *testing.T) {
 	err = EjectVolume("/Volumes/X")
 	if err == nil || !strings.Contains(err.Error(), "close Finder previews") {
 		t.Fatalf("fallback err = %v", err)
+	}
+
+	holdersOf = func(string) ([]Holder, error) { return nil, errors.New("lsof timed out") }
+	err = EjectVolume("/Volumes/X")
+	if err == nil || !strings.Contains(err.Error(), "couldn't inspect") || !strings.Contains(err.Error(), "lsof timed out") {
+		t.Fatalf("inspection err = %v", err)
 	}
 }

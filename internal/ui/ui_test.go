@@ -99,6 +99,30 @@ func TestEjectLine(t *testing.T) {
 	}
 }
 
+// AS-37 to AS-40: readiness includes process holders and fails closed when inspection fails.
+func TestEjectLineIncludesProcessHoldersAndInspectionFailure(t *testing.T) {
+	holder := snapshot(target.Stopped)
+	holder.Holders = []Holder{{Name: "zsh", PID: 23721}}
+	if v := loaded(&fakeCtl{snap: holder}).View(); strings.Contains(v, "safe to eject") ||
+		!strings.Contains(v, "zsh (PID 23721, using drive)") {
+		t.Fatalf("holder:\n%s", v)
+	}
+
+	mixed := snapshot(target.Running)
+	mixed.Holders = []Holder{{Name: "Finder", PID: 88}}
+	if v := loaded(&fakeCtl{snap: mixed}).View(); !strings.Contains(v, "docker (running)") ||
+		!strings.Contains(v, "Finder (PID 88, using drive)") {
+		t.Fatalf("mixed blockers:\n%s", v)
+	}
+
+	unknown := snapshot(target.Stopped)
+	unknown.HolderErr = "lsof timed out"
+	if v := loaded(&fakeCtl{snap: unknown}).View(); strings.Contains(v, "safe to eject") ||
+		!strings.Contains(v, "readiness unknown") || !strings.Contains(v, "lsof timed out") {
+		t.Fatalf("unknown:\n%s", v)
+	}
+}
+
 func TestUnknownStateShowsTheProbeErrorForTheSelectedTarget(t *testing.T) {
 	f := &fakeCtl{snap: snapshot(target.Unknown)}
 	f.snap.Rows[0].Err = "docker desktop status not supported"

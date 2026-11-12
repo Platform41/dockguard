@@ -26,6 +26,12 @@ type Row struct {
 	Err string
 }
 
+// Holder is an unmanaged process with an open file or current directory on the drive.
+type Holder struct {
+	Name string
+	PID  int
+}
+
 // Snapshot is one probe of the drive and every target.
 type Snapshot struct {
 	ConfigPath string
@@ -35,6 +41,9 @@ type Snapshot struct {
 	UsedPct         float64
 	FreeGB, TotalGB uint64
 	Rows            []Row
+	Holders         []Holder
+	// HolderErr means process inspection was incomplete; readiness must fail closed.
+	HolderErr string
 }
 
 // Action is something the dashboard can ask the controller to do.
@@ -76,6 +85,9 @@ func Blockers(s Snapshot) []string {
 		if r.State != target.Stopped {
 			blockers = append(blockers, fmt.Sprintf("%s (%s)", r.Name, r.State))
 		}
+	}
+	for _, h := range s.Holders {
+		blockers = append(blockers, fmt.Sprintf("%s (PID %d, using drive)", h.Name, h.PID))
 	}
 	return blockers
 }
@@ -349,9 +361,16 @@ func (m Model) View() string {
 	case !m.snap.Mounted:
 		b.WriteString(fmt.Sprintf(" %s  %s\n", title.Render("Eject"), dim.Render("nothing to eject")))
 	case len(blockers) == 0:
-		b.WriteString(fmt.Sprintf(" %s  %s\n", title.Render("Eject"), good.Render("✓ safe to eject")))
+		if m.snap.HolderErr != "" {
+			b.WriteString(fmt.Sprintf(" %s  %s %s\n", title.Render("Eject"), bad.Render("? readiness unknown:"), m.snap.HolderErr))
+		} else {
+			b.WriteString(fmt.Sprintf(" %s  %s\n", title.Render("Eject"), good.Render("✓ safe to eject")))
+		}
 	default:
 		b.WriteString(wrapList(" "+title.Render("Eject")+"  "+bad.Render("✗ blocked by:")+" ", blockers, width))
+		if m.snap.HolderErr != "" {
+			b.WriteString(fmt.Sprintf(" %s  %s %s\n", title.Render("Eject"), bad.Render("? process inspection incomplete:"), m.snap.HolderErr))
+		}
 	}
 	b.WriteString("\n")
 
