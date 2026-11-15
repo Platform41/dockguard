@@ -46,3 +46,13 @@ func TestRunDetachedContextCapturesOutputAndReportsNonZeroExit(t *testing.T) {
 		t.Fatalf("RunDetachedContext = %q, %d, %v", out, code, err)
 	}
 }
+
+func TestRunDetachedCommandStreamsCombinedOutput(t *testing.T) {
+	var stream strings.Builder
+	cmd := NewDetachedCommandContext(context.Background(), "/bin/sh", "-c", "echo stdout; echo stderr >&2")
+	output, code, err := RunDetachedCommand(context.Background(), cmd, &stream)
+	if err != nil || code != 0 || output != stream.String() ||
+		!strings.Contains(stream.String(), "stdout") || !strings.Contains(stream.String(), "stderr") {
+		t.Fatalf("RunDetachedCommand = %q, %d, %v; stream %q", output, code, err, stream.String())
+	}
+}
