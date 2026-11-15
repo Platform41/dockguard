@@ -35,9 +35,11 @@ type Holder struct {
 
 // Snapshot is one probe of the drive and every target.
 type Snapshot struct {
-	ConfigPath string
-	Drive      string
-	Mounted    bool
+	ConfigPath                string
+	Drive                     string
+	Mounted                   bool
+	DriveStatus, DriveMessage string
+	CanMount                  bool
 	// UsedPct, FreeGB and TotalGB are zero when the drive isn't mounted.
 	UsedPct         float64
 	FreeGB, TotalGB uint64
@@ -55,6 +57,7 @@ const (
 	Stop
 	Check
 	StopAllEject
+	Mount
 )
 
 func (a Action) String() string {
@@ -65,6 +68,8 @@ func (a Action) String() string {
 		return "stop"
 	case Check:
 		return "check"
+	case Mount:
+		return "mount"
 	default:
 		return "stop --all --eject"
 	}
@@ -266,6 +271,10 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	name := m.selectedName()
 	switch k {
+	case "m":
+		if m.snap.CanMount {
+			return m.dispatch(Mount, "")
+		}
 	case "s":
 		if name != "" {
 			return m.dispatch(Start, name)
@@ -354,7 +363,17 @@ func (m Model) View() string {
 			fmt.Sprintf(" %s  %s  %s %s", title.Render("Drive"), m.snap.Drive, good.Render("●"), usage),
 		) + "\n")
 	} else {
-		b.WriteString(fmt.Sprintf(" %s  %s   %s\n", title.Render("Drive"), m.snap.Drive, bad.Render("○ not mounted")))
+		label := "not mounted"
+		if m.snap.DriveStatus != "" {
+			label = m.snap.DriveStatus
+			if m.snap.DriveMessage != "" {
+				label += " — " + m.snap.DriveMessage
+			}
+		}
+		if m.snap.CanMount {
+			label += " — press m to mount"
+		}
+		b.WriteString(fmt.Sprintf(" %s  %s   %s\n", title.Render("Drive"), m.snap.Drive, bad.Render("○ "+label)))
 	}
 
 	// Eject readiness (AS-32).
@@ -447,7 +466,11 @@ func (m Model) View() string {
 			" "+confirm.Render(short)+" "+dim.Render("y / any key = cancel"),
 		) + "\n")
 	} else {
-		b.WriteString(" " + dim.Render(footer(width-2)) + "\n")
+		if m.snap.CanMount {
+			b.WriteString(" " + dim.Render("m mount · "+footer(width-12)) + "\n")
+		} else {
+			b.WriteString(" " + dim.Render(footer(width-2)) + "\n")
+		}
 	}
 	return b.String()
 }

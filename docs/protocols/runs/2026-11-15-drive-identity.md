@@ -5,7 +5,8 @@ Owner: Three; reviewer: One (Claude); sponsor: Azrad.
 Source: docs/specs/drive-identity.md, approved and merged as b0d2cb4.
 Constraints: no real mount/eject/config access, no dependencies, no merge or release.
 Risk: medium, because drive identity gates storage writes and eject.
-Scope: platform/status first; D-022 must merge before list/status integration and PR.
+Scope: full D-021. Azrad subsequently explicitly requested CLI/dashboard integration
+while D-022 remained pending; One must coordinate the shared list/status changes.
 
 ## Selector
 
@@ -29,6 +30,10 @@ No subagents required. No Foundation asset candidate identified.
 Three delivered fake-tested platform discovery, mount wrapper, drive state rules,
 and config validation. The approved architecture and terminal interaction spec
 remain the design source. No product decisions changed and no dependencies added.
-Deferred: app/output/UI integration until D-022 merges, per handoff gate.
-Next step: integrate identity into the CLI and dashboard after D-022.
-Full implementation and maintainer live acceptance remain pending.
+Subsequent explicit sponsor instruction authorized CLI/dashboard integration,
+acceptance tests and documentation without waiting for D-022. Delivered those
+changes with fake-only tests. No dependencies added; no real config or disk mutation.
+Validation: formatting, vet, full tests and race suite pass.
+Next step: One reviews the PR and maintainer performs the live acceptance check.
+Trade-off: D-022 list/status changes will need coordination during integration.
+Deferred: real-drive experience acceptance, reserved for the maintainer.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/platform41/dockguard/internal/checks"
 	"github.com/platform41/dockguard/internal/config"
+	"github.com/platform41/dockguard/internal/drive"
 	"github.com/platform41/dockguard/internal/output"
 	"github.com/platform41/dockguard/internal/platform"
 	"github.com/platform41/dockguard/internal/target"
@@ -72,6 +73,12 @@ func Run(args []string) (int, error) {
 		return 1, err
 	}
 
+	if opts.Command == "drive" {
+		return runDrive(cfg)
+	}
+	if opts.Command == "mount" {
+		return runMount(cfg)
+	}
 	entries, err := buildTargets(cfg)
 	if err != nil {
 		return 1, err
@@ -108,7 +115,7 @@ func Run(args []string) (int, error) {
 	}
 }
 
-var commands = map[string]bool{"ui": true, "list": true, "status": true, "check": true, "start": true, "stop": true, "help": true, "--help": true, "-h": true}
+var commands = map[string]bool{"drive": true, "mount": true, "ui": true, "list": true, "status": true, "check": true, "start": true, "stop": true, "help": true, "--help": true, "-h": true}
 var takesTarget = map[string]bool{"check": true, "start": true, "stop": true}
 
 func parseArgs(args []string) (options, error) {
@@ -202,8 +209,18 @@ func display(e entry) string {
 // preflight returns the drive check, the target's checks and, if asked, the already-running
 // guard. When the drive isn't mounted, the target's checks are skipped (spec §5).
 func preflight(cfg config.Config, e entry, withGuard bool) []checks.Item {
+	return preflightWithDrive(cfg, e, withGuard, driveStatus(cfg))
+}
+
+func preflightWithDrive(cfg config.Config, e entry, withGuard bool, s drive.Status) []checks.Item {
 	items := checks.Drive(cfg.Drive)
-	if !driveMounted(cfg.Drive) {
+	if cfg.DriveUUID != "" {
+		items = append(items, checks.Item{Name: "registered drive at mount path", OK: s.Mounted(), Message: string(s.State) + ": " + s.Message})
+		if !s.Mounted() {
+			return append(items, checks.Item{Name: e.t.Name() + " checks", Skipped: true, Message: "skipped: drive not mounted"})
+		}
+	}
+	if !s.Mounted() {
 		return append(items, checks.SkipAll(e.t.Checks())...)
 	}
 
@@ -246,8 +263,9 @@ func guard(e entry) checks.Item {
 }
 
 func runList(cfg config.Config, entries []entry) (int, error) {
-	mounted := driveMounted(cfg.Drive)
-	output.PrintHeader(cfg.Path, cfg.Drive, mounted)
+	s := driveStatus(cfg)
+	mounted := s.Mounted()
+	printDriveHeader(cfg, s)
 
 	rows := make([]output.Row, 0, len(entries))
 	for _, e := range entries {
@@ -266,8 +284,9 @@ func runList(cfg config.Config, entries []entry) (int, error) {
 }
 
 func runStatus(cfg config.Config, entries []entry) (int, error) {
-	mounted := driveMounted(cfg.Drive)
-	output.PrintHeader(cfg.Path, cfg.Drive, mounted)
+	ds := driveStatus(cfg)
+	mounted := ds.Mounted()
+	printDriveHeader(cfg, ds)
 	if cfg.Legacy {
 		output.PrintLegacyNotice()
 	}
@@ -286,7 +305,7 @@ func runStatus(cfg config.Config, entries []entry) (int, error) {
 		}
 		output.PrintTargetHeading(e.t.Name(), e.t.Kind(), state)
 
-		items := preflight(cfg, e, false)
+		items := preflightWithDrive(cfg, e, false, ds)
 		output.PrintItems(items)
 		if !checks.AllOK(items) {
 			ready = false
@@ -446,7 +465,11 @@ func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
 // ejectIfAllStopped is the eject rule (spec §2.3): probe every target again, waiting for the ones
 // just stopped, and eject only when every target is confirmed stopped.
 func ejectIfAllStopped(cfg config.Config, entries []entry, justStopped map[string]bool) (int, error) {
-	if !driveMounted(cfg.Drive) {
+	s := driveStatus(cfg)
+	if cfg.DriveUUID != "" && !s.Mounted() {
+		return 1, fmt.Errorf("drive %s: %s (%s); nothing to eject", cfg.Drive, s.State, s.Message)
+	}
+	if !s.Mounted() {
 		return 1, fmt.Errorf("drive %s is not mounted; nothing to eject", cfg.Drive)
 	}
 
@@ -488,6 +511,12 @@ func ejectIfAllStopped(cfg config.Config, entries []entry, justStopped map[strin
 		return 1, errors.New("drive not ejected")
 	}
 
+	if cfg.DriveUUID != "" {
+		fresh := driveStatus(cfg)
+		if !fresh.Mounted() {
+			return 1, fmt.Errorf("drive %s: %s (%s); not ejected", cfg.Drive, fresh.State, fresh.Message)
+		}
+	}
 	if err := ejectVolume(cfg.Drive); err != nil {
 		return 1, err
 	}

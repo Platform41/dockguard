@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/platform41/dockguard/internal/config"
+	"github.com/platform41/dockguard/internal/drive"
 	"github.com/platform41/dockguard/internal/output"
 	"github.com/platform41/dockguard/internal/ui"
 )
@@ -77,7 +78,13 @@ type controller struct {
 }
 
 func (c *controller) Snapshot() ui.Snapshot {
-	s := ui.Snapshot{ConfigPath: c.cfg.Path, Drive: c.cfg.Drive, Mounted: driveMounted(c.cfg.Drive)}
+	ds := driveStatus(c.cfg)
+	s := ui.Snapshot{ConfigPath: c.cfg.Path, Drive: c.cfg.Drive, Mounted: ds.Mounted()}
+	if c.cfg.DriveUUID != "" {
+		s.DriveStatus = string(ds.State)
+		s.DriveMessage = ds.Message
+		s.CanMount = ds.State == drive.NotMounted
+	}
 	if s.Mounted {
 		s.UsedPct, s.FreeGB, s.TotalGB = diskUsage(c.cfg.Drive)
 	}
@@ -142,7 +149,9 @@ func (c *controller) Run(action ui.Action, name string) (bool, string) {
 
 	var code int
 	var err error
-	if action == ui.StopAllEject {
+	if action == ui.Mount {
+		code, err = runMount(c.cfg)
+	} else if action == ui.StopAllEject {
 		code, err = runStopAll(c.cfg, c.entries, true)
 	} else {
 		e, ok := find(c.entries, name)

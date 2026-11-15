@@ -17,20 +17,28 @@ scope_this_milestone:
   - Typed not-found only after a successful valid inventory.
   - Mount wrapper with 90-second limit and distinct context errors.
   - Seven-state drive inspector with injectable OS discovery.
+  - CLI drive/mount commands, registered preflight, list/status and eject integration.
+  - Dashboard status, mount key, busy-action queue and refresh.
+  - Acceptance tests, README and CHANGELOG.
 test_first: Each new component's tests failed before its production implementation.
 validation:
   domain_logic: pass
   config: pass
   database: not_applicable
   api: not_applicable
-  ui: pending_integration
+  ui: pass_automated
   live_experience: pending_maintainer
-completion_status: in_progress
+  gofmt: pass
+  go_vet: pass
+  go_test: pass
+  go_test_race: pass
+completion_status: implemented — validation blocked
+sequencing:
+  - Azrad explicitly requested CLI/dashboard integration while D-022 remained pending.
+  - This branch is based on the approved spec merge b0d2cb4, without D-022 implementation.
+  - One should coordinate app.go list/status overlap when D-022 is implemented.
 remaining:
-  - D-022 must merge before list/status integration and PR, per approved handoff.
-  - Wire identity into CLI, preflight, eject and dashboard.
-  - Implement drive/mount commands and mount-result status re-read.
-  - Add app/UI acceptance tests, README and CHANGELOG.
-  - Re-run final checks and hand off PR to One.
+  - One reviews implementation PR.
+  - Maintainer live acceptance for registration, eject/remount, and dashboard m.
 safety: No real mount/eject, real config reads, or installed-binary changes performed.
 foundation_asset_candidates: []
