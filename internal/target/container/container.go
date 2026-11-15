@@ -35,6 +35,8 @@ var (
 type Target struct {
 	cfg   config.Target
 	drive string
+	// OnDiscard is called immediately before an ephemeral target's down script runs.
+	OnDiscard func(name string)
 }
 
 func New(cfg config.Target, drive string) *Target {
@@ -282,6 +284,9 @@ func (t *Target) StopStack() (bool, error) {
 	}
 	if t.stackState(snap) == target.Stopped {
 		return false, nil
+	}
+	if t.cfg.Container.Ephemeral && t.OnDiscard != nil {
+		t.OnDiscard(t.cfg.Name)
 	}
 	output, code, err := runDetached(t.cfg.Container.Down)
 	if err != nil || code != 0 {

@@ -167,7 +167,11 @@ func defaultBuildTargets(cfg config.Config) ([]entry, error) {
 		case config.KindPostgres:
 			entries = append(entries, entry{t: postgres.New(t, cfg.Drive), cfg: t})
 		case config.KindContainer:
-			entries = append(entries, entry{t: containerkind.New(t, cfg.Drive), cfg: t})
+			e := entry{cfg: t}
+			containerTarget := containerkind.New(t, cfg.Drive)
+			containerTarget.OnDiscard = func(string) { output.PrintEphemeralDiscard(display(e)) }
+			e.t = containerTarget
+			entries = append(entries, e)
 		default:
 			return nil, fmt.Errorf("target %q: kind %q is not supported", t.Name, t.Kind)
 		}
@@ -251,6 +255,9 @@ func runList(cfg config.Config, entries []entry) (int, error) {
 		if mounted {
 			s, _ := e.t.State()
 			state = s.String()
+		}
+		if e.cfg.Container != nil && e.cfg.Container.Ephemeral {
+			state += " (ephemeral)"
 		}
 		rows = append(rows, output.Row{Name: e.t.Name(), Kind: e.t.Kind(), State: state, Path: e.t.MainPath()})
 	}
