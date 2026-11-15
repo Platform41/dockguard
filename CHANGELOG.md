@@ -5,6 +5,7 @@ All notable changes to DockGuard are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Optional `volumes` on `container` targets shows named persistent volumes as `list` sub-rows and `status` information lines, including allocated disk size read directly from each `volume.img`. Missing or unreadable volumes are informational; lifecycle, dashboard and eject behavior are unchanged (D-022).
 - Optional `drive_uuid` registration verifies the configured volume's identity before startup and eject. `list`, `status`, and the dashboard explain attached, missing, misplaced, wrong-volume, stray-folder, and inspection-error states (D-021).
 - Read-only `dockguard drive` prints registration details; `dockguard mount` remounts the registered drive with a 90-second deadline and verifies its resulting path. The dashboard offers `m` when the registered drive is attached but unmounted.
 - `dockguard version`: shows build information, checks the latest release through the Go toolchain, and offers an interactive pinned `go install` update. Installed-file build information is verified before success is reported; other commands and the dashboard remain offline (D-023).
