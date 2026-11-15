@@ -1,6 +1,6 @@
 # Proposal — `dockguard version` and Self-Update
 
-**Status:** Proposed
+**Status:** Approved by Azrad, 2026-11-15
 **Target:** v0.7.0
 **Owner:** One
 **Builder:** Three
@@ -173,9 +173,9 @@ Update to v0.7.0? [y/N]
 
 Ships in `v0.7.0` with the drive-identity work. README: `dockguard version` in the command table.
 
-## 9. Decision requested
+## 9. Approved decision
 
-Approve as D-023, as separate items:
+Approved for `v0.7.0` as D-023, all three items (cross-reviewed by Codex, clean at `5e361e6`):
 
 1. `dockguard version` with offline version info (§3.1);
 2. the latest-release check through the `go` command, only in `version` (§3.2);

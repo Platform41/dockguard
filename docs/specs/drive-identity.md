@@ -1,6 +1,6 @@
 # Proposal — Registered Drive Identity and `dockguard mount`
 
-**Status:** Proposed
+**Status:** Approved by Azrad, 2026-11-15
 **Target:** v0.7.0
 **Owner:** One
 **Builder:** Three
@@ -218,13 +218,13 @@ Requires `drive_uuid`. Acts on the status from §3.2:
 Minor release `v0.7.0`: new optional key and two new commands; no change for configs without
 `drive_uuid`. README: registration steps, the status table and `dockguard mount`.
 
-## 9. Decision requested
+## 9. Approved decision
 
-Approve for `v0.7.0`, as separate items:
+Approved for `v0.7.0` as D-021, all four items:
 
 1. `drive_uuid` and identity status (§3.2), including the preflight check and eject refusal;
 2. `dockguard drive` (§3.1), read-only, printing the snippet;
 3. `dockguard mount` (§3.3);
 4. dashboard drive-line status and the `m` key (§3.4).
 
-If approved, record D-021.
+Cross-reviewed by Codex (clean at `5e361e6`). Recorded as D-021.
