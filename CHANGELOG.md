@@ -2,6 +2,12 @@
 
 All notable changes to DockGuard are documented in this file.
 
+## [Unreleased]
+
+### Added
+- Optional `drive_uuid` registration verifies the configured volume's identity before startup and eject. `list`, `status`, and the dashboard explain attached, missing, misplaced, wrong-volume, stray-folder, and inspection-error states (D-021).
+- Read-only `dockguard drive` prints registration details; `dockguard mount` remounts the registered drive with a 90-second deadline and verifies its resulting path. The dashboard offers `m` when the registered drive is attached but unmounted.
+
 ## [v0.6.0] - 2026-11-15
 
 ### Added

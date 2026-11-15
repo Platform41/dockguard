@@ -81,8 +81,45 @@ DockGuard is not an "images-only offload" tool. It protects a setup where Docker
 
 ## Commands
 
+`dockguard drive` inspects the volume at the configured `drive` path and prints a
+`drive_uuid:` line. Paste that line into your current-format configuration to
+register the volume; DockGuard leaves the config file for you to edit.
+
+```yaml
+drive: /Volumes/ExternalSSD
+drive_uuid: 11111111-2222-3333-4444-555555555555 # use the UUID printed by dockguard drive
+# targets: ...
+```
+
+With a registered UUID, only that volume mounted at the configured path counts
+as mounted. `start` and preflight checks require verified identity, and eject
+refuses if identity cannot be verified. Configs without `drive_uuid` keep the
+existing directory check and show a registration hint in `list` and `status`.
+The legacy v0.1 format does not accept `drive_uuid`.
+
+| Drive status | Meaning / next action |
+| --- | --- |
+| `mounted` | Registered volume is at the configured path. |
+| `not mounted` | Registered volume is attached; run `dockguard mount`. |
+| `not connected` | Registered UUID is absent from a successful disk inventory; plug it in. |
+| `mounted elsewhere` | The volume is mounted at the reported different path. |
+| `wrong volume` | A different volume occupies the configured path; both UUIDs are reported. |
+| `stray folder` | The configured path exists but is not a mount point. |
+| `unknown` | Disk inspection failed or timed out; the error is reported. |
+
+`dockguard mount` requires registration and mounts only an attached, unmounted
+volume with an available path. It waits at most 90 seconds for `diskutil mount`,
+then rechecks identity; failures and timeouts also report the freshly read state.
+It refuses occupied paths, leaves folders and volume names alone, and does not
+start targets. Normal macOS auto-mount behavior is unchanged; no `sudo` is needed.
+The dashboard shows the same status and offers `m mount` only when the registered
+drive is attached but unmounted. The action runs with the usual `Working…` display
+and refreshes afterward.
+
 | Command | Does |
 | --- | --- |
+| `dockguard drive` | Inspects the volume and prints its registration line. |
+| `dockguard mount` | Mounts the registered, attached volume and verifies its path. |
 | `dockguard ui` | Live dashboard: the drive, whether it's safe to eject, and every target's state, with keys to start, stop, check, or stop everything and eject |
 | `dockguard list` | Lists the configured targets with their state (running, partial, stopped or unknown) and path. Runs no checks. |
 | `dockguard status` | Every target's state and checks. Exits 0 when every target is ready. A running target counts as ready; one whose state can't be read doesn't. |

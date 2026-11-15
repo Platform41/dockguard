@@ -29,6 +29,8 @@ func PrintUsage() {
 	fmt.Fprintln(Out, "  dockguard ui [--config path]           live dashboard")
 	fmt.Fprintln(Out, "  dockguard list [--config path]")
 	fmt.Fprintln(Out, "  dockguard status [--config path]")
+	fmt.Fprintln(Out, "  dockguard drive [--config path]        inspect drive registration")
+	fmt.Fprintln(Out, "  dockguard mount [--config path]        mount registered drive")
 	fmt.Fprintln(Out, "  dockguard check [target] [--config path]")
 	fmt.Fprintln(Out, "  dockguard start [target] [--config path]")
 	fmt.Fprintln(Out, "  dockguard stop [target] [--config path] [--eject]")

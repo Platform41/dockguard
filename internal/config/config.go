@@ -46,6 +46,8 @@ type Config struct {
 	Legacy bool
 	// Drive is the external volume every target depends on.
 	Drive string
+	// DriveUUID optionally pins the volume trusted at Drive (D-021).
+	DriveUUID string
 	// MinimumFreeSpaceGB is the default free-space threshold for every target.
 	MinimumFreeSpaceGB int
 	// Targets are in file order.
@@ -178,7 +180,8 @@ func Load(explicit string) (Config, error) {
 	return cfg, nil
 }
 
-var newFormatKeys = map[string]bool{"drive": true, "targets": true}
+var newFormatKeys = map[string]bool{"drive": true, "targets": true, "drive_uuid": true}
+var driveUUIDPattern = regexp.MustCompile(`^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$`)
 var legacyKeys = map[string]bool{"external_mount_path": true, "docker_storage_path": true, "docker_desktop": true}
 
 // Parse reads config content in either the current or the v0.1 format.
@@ -223,11 +226,20 @@ func Parse(content []byte) (Config, error) {
 
 type currentFile struct {
 	Drive              string    `yaml:"drive"`
+	DriveUUID          string    `yaml:"drive_uuid"`
 	MinimumFreeSpaceGB *int      `yaml:"minimum_free_space_gb"`
 	Targets            yaml.Node `yaml:"targets"`
 }
 
 func parseCurrent(doc *yaml.Node) (Config, error) {
+	for i := 0; i < len(doc.Content); i += 2 {
+		if doc.Content[i].Value == "drive_uuid" {
+			value := doc.Content[i+1]
+			if value.Kind != yaml.ScalarNode || value.Tag != "!!str" || !driveUUIDPattern.MatchString(value.Value) {
+				return Config{}, errors.New("drive_uuid must be a volume UUID (XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX)")
+			}
+		}
+	}
 	var file currentFile
 	if err := doc.Decode(&file); err != nil {
 		return Config{}, err
@@ -235,6 +247,7 @@ func parseCurrent(doc *yaml.Node) (Config, error) {
 
 	cfg := Config{
 		Drive:              cleanPath(file.Drive),
+		DriveUUID:          file.DriveUUID,
 		MinimumFreeSpaceGB: defaultMinimumFreeSpaceGB,
 	}
 	if cfg.Drive == "" {
