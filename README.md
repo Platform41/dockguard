@@ -180,6 +180,9 @@ stop.` A stopped stack or a system-only stop does not run `down`, so it prints n
 The flag adds no confirmation prompt and does not change stop order, eject readiness, or the
 existing dashboard stop and eject confirmations.
 
+For a worked example with `ready` and `ephemeral`, see
+[AWS Emulator as a `container` target](docs/recipes/aws-emulator.md).
+
 Unknown keys and kinds are errors. Target names use lowercase letters, digits and `-`. Paths must
 be absolute or start with `~/`.
 
