@@ -167,7 +167,11 @@ func defaultBuildTargets(cfg config.Config) ([]entry, error) {
 		case config.KindPostgres:
 			entries = append(entries, entry{t: postgres.New(t, cfg.Drive), cfg: t})
 		case config.KindContainer:
-			entries = append(entries, entry{t: containerkind.New(t, cfg.Drive), cfg: t})
+			e := entry{cfg: t}
+			containerTarget := containerkind.New(t, cfg.Drive)
+			containerTarget.OnDiscard = func(string) { output.PrintEphemeralDiscard(display(e)) }
+			e.t = containerTarget
+			entries = append(entries, e)
 		default:
 			return nil, fmt.Errorf("target %q: kind %q is not supported", t.Name, t.Kind)
 		}
@@ -252,6 +256,9 @@ func runList(cfg config.Config, entries []entry) (int, error) {
 			s, _ := e.t.State()
 			state = s.String()
 		}
+		if e.cfg.Container != nil && e.cfg.Container.Ephemeral {
+			state += " (ephemeral)"
+		}
 		rows = append(rows, output.Row{Name: e.t.Name(), Kind: e.t.Kind(), State: state, Path: e.t.MainPath()})
 	}
 	output.PrintList(rows)
@@ -304,6 +311,7 @@ func runCheck(cfg config.Config, e entry) (int, error) {
 
 // readinessStarter keeps readiness local to container targets instead of widening target.Target.
 type readinessStarter interface {
+	ReadinessEnabled() bool
 	StartWithReadiness() (time.Duration, error)
 }
 
@@ -316,11 +324,7 @@ func runStart(cfg config.Config, e entry) (int, error) {
 		return 1, fmt.Errorf("refusing to start %s because preflight checks failed", display(e))
 	}
 
-	if e.cfg.Container != nil && e.cfg.Container.Ready != "" {
-		starter, ok := e.t.(readinessStarter)
-		if !ok {
-			return 1, fmt.Errorf("target %s does not support readiness checks", display(e))
-		}
+	if starter, ok := e.t.(readinessStarter); ok && starter.ReadinessEnabled() {
 		elapsed, err := starter.StartWithReadiness()
 		if err != nil {
 			var notReady *containerkind.NotReadyError

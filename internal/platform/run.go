@@ -28,32 +28,22 @@ func Run(name string, args ...string) (output string, code int, err error) {
 // to a temporary file instead of a pipe: a child that inherits the output would hold a pipe open
 // and make the caller wait for it to exit, but a file can't. It returns once the command exits.
 func RunDetached(name string, args ...string) (output string, code int, err error) {
-	file, err := os.CreateTemp("", "dockguard-run-*")
-	if err != nil {
-		return "", -1, err
-	}
-	defer os.Remove(file.Name())
-	defer file.Close()
-
-	cmd := exec.Command(name, args...)
-	cmd.Stdout = file
-	cmd.Stderr = file
-	runErr := cmd.Run()
-
-	out, _ := os.ReadFile(file.Name())
-	if runErr == nil {
-		return string(out), 0, nil
-	}
-	var exitErr *exec.ExitError
-	if errors.As(runErr, &exitErr) {
-		return string(out), exitErr.ExitCode(), nil
-	}
-	return string(out), -1, runErr
+	return runDetachedCommand(nil, exec.Command(name, args...))
 }
 
 // RunDetachedContext is RunDetached with cancellation. The process group is killed so a readiness
 // script's descendants cannot survive its deadline or keep the caller waiting.
 func RunDetachedContext(ctx context.Context, name string, args ...string) (output string, code int, err error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	cmd.WaitDelay = time.Second
+	return runDetachedCommand(ctx, cmd)
+}
+
+func runDetachedCommand(ctx context.Context, cmd *exec.Cmd) (output string, code int, err error) {
 	file, err := os.CreateTemp("", "dockguard-run-*")
 	if err != nil {
 		return "", -1, err
@@ -61,22 +51,18 @@ func RunDetachedContext(ctx context.Context, name string, args ...string) (outpu
 	defer os.Remove(file.Name())
 	defer file.Close()
 
-	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdout = file
 	cmd.Stderr = file
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	}
-	cmd.WaitDelay = time.Second
 	runErr := cmd.Run()
 
 	out, _ := os.ReadFile(file.Name())
 	if runErr == nil {
 		return string(out), 0, nil
 	}
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return string(out), -1, ctxErr
+	if ctx != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return string(out), -1, ctxErr
+		}
 	}
 	var exitErr *exec.ExitError
 	if errors.As(runErr, &exitErr) {

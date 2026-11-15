@@ -171,7 +171,14 @@ targets:
     stop_system: true               # optional: also stop Apple container's system service
     ready: ~/bin/myapp-ready.sh     # optional: poll after up until the service is usable
     ready_timeout_seconds: 30       # optional: default 30; allowed 1-300
+    ephemeral: true                 # optional: warn that down discards this stack's data
 ```
+
+For an ephemeral container target, `list` and the dashboard append `(ephemeral)` to its state.
+Immediately before `down` runs, DockGuard prints `<target> is ephemeral: its data is discarded on
+stop.` A stopped stack or a system-only stop does not run `down`, so it prints no discard notice.
+The flag adds no confirmation prompt and does not change stop order, eject readiness, or the
+existing dashboard stop and eject confirmations.
 
 Unknown keys and kinds are errors. Target names use lowercase letters, digits and `-`. Paths must
 be absolute or start with `~/`.

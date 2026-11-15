@@ -35,6 +35,8 @@ var (
 type Target struct {
 	cfg   config.Target
 	drive string
+	// OnDiscard is called immediately before an ephemeral target's down script runs.
+	OnDiscard func(name string)
 }
 
 func New(cfg config.Target, drive string) *Target {
@@ -221,6 +223,11 @@ func (t *Target) Start() error {
 	return err
 }
 
+// ReadinessEnabled reports whether this target has a readiness script to poll after start.
+func (t *Target) ReadinessEnabled() bool {
+	return t.cfg.Container.Ready != ""
+}
+
 // StartWithReadiness runs up, then polls ready once per second until success or the overall
 // deadline. A not-ready result never stops the container.
 func (t *Target) StartWithReadiness() (time.Duration, error) {
@@ -236,6 +243,7 @@ func (t *Target) StartWithReadiness() (time.Duration, error) {
 	started := now()
 	timeout := time.Duration(c.ReadyTimeoutSeconds) * time.Second
 	deadline := started.Add(timeout)
+	// Deadline arithmetic uses injectable now; contexts use the wall clock (identical in production).
 	overall, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
 
@@ -282,6 +290,9 @@ func (t *Target) StopStack() (bool, error) {
 	}
 	if t.stackState(snap) == target.Stopped {
 		return false, nil
+	}
+	if t.cfg.Container.Ephemeral && t.OnDiscard != nil {
+		t.OnDiscard(t.cfg.Name)
 	}
 	output, code, err := runDetached(t.cfg.Container.Down)
 	if err != nil || code != 0 {

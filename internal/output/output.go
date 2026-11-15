@@ -127,6 +127,10 @@ func formatSeconds(duration time.Duration) string {
 	return strings.TrimSuffix(fmt.Sprintf("%.1f", duration.Seconds()), ".0")
 }
 
+func PrintEphemeralDiscard(display string) {
+	fmt.Fprintf(Out, "%s is ephemeral: its data is discarded on stop.\n", display)
+}
+
 func PrintStopped(display string) {
 	fmt.Fprintf(Out, "%s stop requested.\n", display)
 }

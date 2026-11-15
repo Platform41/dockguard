@@ -99,6 +99,9 @@ func (c *controller) Snapshot() ui.Snapshot {
 	}
 	for i, e := range c.entries {
 		s.Rows[i] = ui.Row{Name: e.t.Name(), Kind: e.t.Kind(), Path: e.t.MainPath()}
+		if e.cfg.Container != nil {
+			s.Rows[i].Ephemeral = e.cfg.Container.Ephemeral
+		}
 		if !s.Mounted {
 			continue
 		}

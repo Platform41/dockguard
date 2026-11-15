@@ -102,6 +102,8 @@ type Container struct {
 	// Ready is polled after up when set. ReadyTimeoutSeconds defaults to 30.
 	Ready               string
 	ReadyTimeoutSeconds int
+	// Ephemeral marks data as discarded whenever down runs.
+	Ephemeral bool
 }
 
 // Find returns the target with the given name.
@@ -290,7 +292,7 @@ var allowedKeys = map[string][]string{
 	KindDockerDesktop: {"kind", "storage_path", "settings_path", "require_cli_start_support", "fail_if_already_running", "minimum_free_space_gb"},
 	KindApp:           {"kind", "app", "process", "symlink_paths", "fail_if_already_running"},
 	KindPostgres:      {"kind", "data_dir", "bin_dir", "port", "socket_dir", "log_file", "fail_if_already_running"},
-	KindContainer:     {"kind", "up", "down", "containers", "data_path", "stop_system", "fail_if_already_running", "ready", "ready_timeout_seconds"},
+	KindContainer:     {"kind", "up", "down", "containers", "data_path", "stop_system", "fail_if_already_running", "ready", "ready_timeout_seconds", "ephemeral"},
 }
 
 func parseTarget(name string, node *yaml.Node, defaultFreeGB int) (Target, error) {
@@ -499,6 +501,7 @@ type containerKeys struct {
 	FailIfAlreadyRunning *bool    `yaml:"fail_if_already_running"`
 	Ready                string   `yaml:"ready"`
 	ReadyTimeoutSeconds  *int     `yaml:"ready_timeout_seconds"`
+	Ephemeral            *bool    `yaml:"ephemeral"`
 }
 
 func parseContainer(name string, node *yaml.Node) (Target, error) {
@@ -513,6 +516,7 @@ func parseContainer(name string, node *yaml.Node) (Target, error) {
 		StopSystem:          boolOr(keys.StopSystem, false),
 		Ready:               cleanPath(keys.Ready),
 		ReadyTimeoutSeconds: 30,
+		Ephemeral:           boolOr(keys.Ephemeral, false),
 	}
 	if keys.ReadyTimeoutSeconds != nil {
 		if *keys.ReadyTimeoutSeconds < 1 || *keys.ReadyTimeoutSeconds > 300 {

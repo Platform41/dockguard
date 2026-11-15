@@ -22,6 +22,7 @@ var RefreshInterval = 3 * time.Second
 type Row struct {
 	Name, Kind, Path string
 	State            target.State
+	Ephemeral        bool
 	// Err explains an unknown state.
 	Err string
 }
@@ -375,9 +376,17 @@ func (m Model) View() string {
 	b.WriteString("\n")
 
 	// Targets.
-	nameW, kindW := 4, 4
+	nameW, kindW, stateW := 4, 4, 7
 	for _, r := range m.snap.Rows {
 		nameW, kindW = max(nameW, len(r.Name)), max(kindW, len(r.Kind))
+		width := len(r.State.String())
+		if !m.snap.Mounted {
+			width = len("drive not mounted")
+		}
+		if r.Ephemeral {
+			width += len(" (ephemeral)")
+		}
+		stateW = max(stateW, width)
 	}
 	for i, r := range m.snap.Rows {
 		marker := " "
@@ -386,10 +395,15 @@ func (m Model) View() string {
 		}
 		// Pad before styling: colour codes would otherwise count towards the column width.
 		prefix := fmt.Sprintf(" %s%%s %-*s  %s  ", marker, nameW, r.Name, dim.Render(fmt.Sprintf("%-*s", kindW, r.Kind)))
-		mark, state := stateMark(r.State), padState(stateText(r.State))
+		stateLabel := stateText(r.State)
+		mark := stateMark(r.State)
 		if !m.snap.Mounted {
-			mark, state = dim.Render("·"), dim.Render("drive not mounted")
+			mark, stateLabel = dim.Render("·"), dim.Render("drive not mounted")
 		}
+		if r.Ephemeral {
+			stateLabel += dim.Render(" (ephemeral)")
+		}
+		state := padState(stateLabel, stateW)
 		line := fmt.Sprintf(prefix, mark) + state + "  "
 		b.WriteString(line + dim.Render(truncateLeft(r.Path, width-lipgloss.Width(line)-1)) + "\n")
 	}
@@ -497,8 +511,8 @@ func truncateLeft(s string, width int) string {
 	return "…" + string(r[len(r)-width+1:])
 }
 
-func padState(s string) string {
-	return s + strings.Repeat(" ", max(0, 7-lipgloss.Width(s)))
+func padState(s string, width int) string {
+	return s + strings.Repeat(" ", max(0, width-lipgloss.Width(s)))
 }
 
 func usageBar(pct float64, width int) string {
