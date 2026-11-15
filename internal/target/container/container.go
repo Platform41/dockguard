@@ -3,6 +3,7 @@
 package container
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/platform41/dockguard/internal/checks"
 	"github.com/platform41/dockguard/internal/config"
@@ -19,10 +21,14 @@ import (
 
 // Swappable for tests.
 var (
-	run         = platform.Run
-	runDetached = platform.RunDetached
-	lookPath    = exec.LookPath
-	homeDir     = os.UserHomeDir
+	run                = platform.Run
+	runDetached        = platform.RunDetached
+	runDetachedContext = platform.RunDetachedContext
+	lookPath           = exec.LookPath
+	homeDir            = os.UserHomeDir
+	now                = time.Now
+	sleep              = time.Sleep
+	readyPollInterval  = time.Second
 )
 
 // Target is an Apple container stack such as Fizzy.
@@ -52,6 +58,9 @@ func (t *Target) Checks() []checks.Item {
 		executable("up script executable", c.Up),
 		executable("down script executable", c.Down),
 		onPath("container CLI on the PATH"),
+	}
+	if c.Ready != "" {
+		items = append(items, executable("ready script executable", c.Ready))
 	}
 	if c.DataPath != "" {
 		items = append(items,
@@ -198,12 +207,59 @@ func (t *Target) GuardState() (target.State, error) {
 	return t.stackState(snap), nil
 }
 
+// NotReadyError reports that up succeeded but ready did not within its overall timeout.
+type NotReadyError struct {
+	Timeout time.Duration
+}
+
+func (e *NotReadyError) Error() string {
+	return fmt.Sprintf("started but not ready after %s", e.Timeout)
+}
+
 func (t *Target) Start() error {
-	output, code, err := runDetached(t.cfg.Container.Up)
+	_, err := t.StartWithReadiness()
+	return err
+}
+
+// StartWithReadiness runs up, then polls ready once per second until success or the overall
+// deadline. A not-ready result never stops the container.
+func (t *Target) StartWithReadiness() (time.Duration, error) {
+	c := t.cfg.Container
+	output, code, err := runDetached(c.Up)
 	if err != nil || code != 0 {
-		return fmt.Errorf("start %s: %s exited %d: %s %s", t.cfg.Name, t.cfg.Container.Up, code, strings.TrimSpace(output), errOrEmpty(err))
+		return 0, fmt.Errorf("start %s: %s exited %d: %s %s", t.cfg.Name, c.Up, code, strings.TrimSpace(output), errOrEmpty(err))
 	}
-	return nil
+	if c.Ready == "" {
+		return 0, nil
+	}
+
+	started := now()
+	timeout := time.Duration(c.ReadyTimeoutSeconds) * time.Second
+	deadline := started.Add(timeout)
+	overall, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	for {
+		remaining := deadline.Sub(now())
+		if remaining <= 0 {
+			return 0, &NotReadyError{Timeout: timeout}
+		}
+		attemptBound := min(5*time.Second, remaining)
+		attempt, cancelAttempt := context.WithDeadline(overall, now().Add(attemptBound))
+		_, code, err = runDetachedContext(attempt, c.Ready)
+		cancelAttempt()
+		if err == nil && code == 0 {
+			return now().Sub(started), nil
+		}
+
+		remaining = deadline.Sub(now())
+		if remaining > readyPollInterval {
+			remaining = readyPollInterval
+		}
+		if remaining > 0 {
+			sleep(remaining)
+		}
+	}
 }
 
 // Stop runs down when any of the stack's containers runs, then, with stop_system, stops the
