@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"syscall"
@@ -28,22 +29,28 @@ func Run(name string, args ...string) (output string, code int, err error) {
 // to a temporary file instead of a pipe: a child that inherits the output would hold a pipe open
 // and make the caller wait for it to exit, but a file can't. It returns once the command exits.
 func RunDetached(name string, args ...string) (output string, code int, err error) {
-	return runDetachedCommand(nil, exec.Command(name, args...))
+	return RunDetachedCommand(nil, exec.Command(name, args...), nil)
 }
 
 // RunDetachedContext is RunDetached with cancellation. The process group is killed so a readiness
 // script's descendants cannot survive its deadline or keep the caller waiting.
 func RunDetachedContext(ctx context.Context, name string, args ...string) (output string, code int, err error) {
+	return RunDetachedCommand(ctx, NewDetachedCommandContext(ctx, name, args...), nil)
+}
+
+// NewDetachedCommandContext configures a command whose process group is killed on cancellation.
+func NewDetachedCommandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
 	cmd.WaitDelay = time.Second
-	return runDetachedCommand(ctx, cmd)
+	return cmd
 }
 
-func runDetachedCommand(ctx context.Context, cmd *exec.Cmd) (output string, code int, err error) {
+// RunDetachedCommand runs a configured detached command and optionally streams its combined output.
+func RunDetachedCommand(ctx context.Context, cmd *exec.Cmd, stream io.Writer) (output string, code int, err error) {
 	file, err := os.CreateTemp("", "dockguard-run-*")
 	if err != nil {
 		return "", -1, err
@@ -51,8 +58,12 @@ func runDetachedCommand(ctx context.Context, cmd *exec.Cmd) (output string, code
 	defer os.Remove(file.Name())
 	defer file.Close()
 
-	cmd.Stdout = file
-	cmd.Stderr = file
+	var writer io.Writer = file
+	if stream != nil {
+		writer = io.MultiWriter(file, stream)
+	}
+	cmd.Stdout = writer
+	cmd.Stderr = writer
 	runErr := cmd.Run()
 
 	out, _ := os.ReadFile(file.Name())

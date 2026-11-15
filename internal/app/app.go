@@ -66,6 +66,8 @@ func Run(args []string) (int, error) {
 	case "help", "--help", "-h":
 		output.PrintUsage()
 		return 0, nil
+	case "version":
+		return runVersion()
 	}
 
 	cfg, err := loadConfig(opts.ConfigPath)
@@ -115,7 +117,7 @@ func Run(args []string) (int, error) {
 	}
 }
 
-var commands = map[string]bool{"drive": true, "mount": true, "ui": true, "list": true, "status": true, "check": true, "start": true, "stop": true, "help": true, "--help": true, "-h": true}
+var commands = map[string]bool{"drive": true, "mount": true, "ui": true, "version": true, "list": true, "status": true, "check": true, "start": true, "stop": true, "help": true, "--help": true, "-h": true}
 var takesTarget = map[string]bool{"check": true, "start": true, "stop": true}
 
 func parseArgs(args []string) (options, error) {
