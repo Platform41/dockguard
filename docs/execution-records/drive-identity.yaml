@@ -1,0 +1,36 @@
+task: D-021 registered drive identity
+task_class: feature
+risk: medium
+risk_reasons:
+  - Identity will gate external-storage access and eject.
+behavior_spec: docs/specs/drive-identity.md
+behavior_spec_approved: true
+blueprint_received: n/a
+workflow: Foundation OS feature-delivery
+repository_inspection:
+  relevant_files_identified: true
+  existing_pattern_checked: true
+  dependencies_understood: true
+scope_this_milestone:
+  - Optional drive_uuid parsing and validation, rejected for legacy configs.
+  - Disk inventory and info parsing with injectable command runner and 5-second limits.
+  - Typed not-found only after a successful valid inventory.
+  - Mount wrapper with 90-second limit and distinct context errors.
+  - Seven-state drive inspector with injectable OS discovery.
+test_first: Each new component's tests failed before its production implementation.
+validation:
+  domain_logic: pass
+  config: pass
+  database: not_applicable
+  api: not_applicable
+  ui: pending_integration
+  live_experience: pending_maintainer
+completion_status: in_progress
+remaining:
+  - D-022 must merge before list/status integration and PR, per approved handoff.
+  - Wire identity into CLI, preflight, eject and dashboard.
+  - Implement drive/mount commands and mount-result status re-read.
+  - Add app/UI acceptance tests, README and CHANGELOG.
+  - Re-run final checks and hand off PR to One.
+safety: No real mount/eject, real config reads, or installed-binary changes performed.
+foundation_asset_candidates: []
