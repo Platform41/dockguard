@@ -67,7 +67,7 @@ _None._
   **Owner:** One
   **Priority:** P2
   **Completed:** 2026-11-15
-  **Branch:** `chore/release-v0.6.0`
+  **Branch:** `chore/release-v0.6.0` (PR #24)
   **Deliverable:** `docs/releases/v0.6.0.md`, tag `v0.6.0`
   **Notes:** Release review reran the full Go suite (224 tests), race suite and `go vet` from merged
   master `9b7ebf8`. Live check with the real `aws-emulator` target passed. New optional keys only.
