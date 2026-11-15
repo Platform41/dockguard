@@ -63,16 +63,15 @@ _None._
 
 ### Done
 
-- [ ] `[v0.7.0] Release: drive identity, dockguard version, container volumes`
+- [x] `[v0.7.0] Release: drive identity, dockguard version, container volumes`
   **Owner:** One
   **Priority:** P2
-  **Status:** Release PR open; tag after maintainer live checks
-  **Branch:** `chore/release-v0.7.0`
+  **Completed:** 2026-11-16
+  **Branch:** `chore/release-v0.7.0` (PR #30)
   **Deliverable:** `docs/releases/v0.7.0.md`, tag `v0.7.0`
   **Notes:** Release review reran the full Go suite (383 tests), race suite and `go vet` from merged
-  master `93deed5`. Maintainer live checks pending: drive registration, eject, `dockguard mount`,
-  dashboard `m`, `fizzy` volumes with the container system running and stopped, and the pre-tag
-  `dockguard version` update offer.
+  master `93deed5`. Maintainer live checks passed: drive registration, eject, `dockguard mount`,
+  dashboard `m`, `fizzy` volumes with the container system running and stopped.
 
 - [x] `[v0.7.0] Registered drive identity and dockguard mount`
   **Owner:** Three
