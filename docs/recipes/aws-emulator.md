@@ -16,7 +16,9 @@ Tested on 2026-11-15 with Apple `container` 1.7.1 on Apple silicon, AWS Emulator
   `403`.
 - About **900 MiB** of memory while idle (2 GiB limit below).
 - API coverage varies by service. Treat it as a fast local loop, not a replacement for testing
-  against AWS.
+  against AWS, and never for testing IAM or other security controls.
+- Only port 9297 is published. AWS notes that some resources, such as databases, get an endpoint on
+  another `127.0.0.1` port; those aren't reachable from macOS with this setup.
 
 ## Prerequisites
 
@@ -31,10 +33,10 @@ Save as `~/.config/dockguard/aws-emulator/Dockerfile`:
 ```dockerfile
 FROM public.ecr.aws/amazonlinux/amazonlinux:2023-minimal
 
-# AWS publishes only an LTS/latest URL. The checksum pins the tested package (1.0.385): if latest
-# moves on, the build fails with "digest mismatch" instead of silently changing version.
+# Pinned to a specific version (versioned URL from AWS's versioning guide) and to the SHA-256 of
+# the signature-verified package, so the build fails with "digest mismatch" if the file changes.
 ADD --checksum=sha256:e2f01620e9f4e8c37c0ce7f32381fde3ffb7e8270331c8c23de2ec877b6a9043 \
-    https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest/aws-emulator-aarch64.rpm \
+    https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/aws-emulator-1.0.385-1-aarch64.rpm \
     /tmp/aws-emulator.rpm
 
 RUN rpm -i /tmp/aws-emulator.rpm \
@@ -55,8 +57,9 @@ container system start
 container build --platform linux/arm64 -t aws-emulator:local ~/.config/dockguard/aws-emulator
 ```
 
-`rpm` prints `Header V4 RSA/SHA512 Signature, key ID d940f624: NOKEY`: the package signature is
-not verified inside the image. The checksum is what guarantees you get the tested file.
+`rpm` prints `Header V4 RSA/SHA512 Signature, key ID d940f624: NOKEY` because AWS's key isn't in
+the image. That's expected: the checksum pins a file whose detached signature was verified against
+AWS's publishing key when it was pinned (see [Updating the emulator](#updating-the-emulator)).
 
 ## 2. Scripts
 
@@ -77,7 +80,7 @@ mkdir -p "$HOME/.aws/emulator"
 exec container run -d --name aws-emulator --cpus 2 --memory 2G \
   -p "127.0.0.1:$PORT:$PORT" \
   -e HOME="$HOME" -v "$HOME/.aws/emulator:$HOME/.aws/emulator" \
-  aws-emulator:local --telemetry off
+  aws-emulator:local -p "$PORT" --telemetry off
 ```
 
 `~/.config/dockguard/aws-emulator-ready.sh`:
@@ -110,6 +113,9 @@ Why these flags:
 - `-e HOME="$HOME"` with the folder mounted at the **same path** in the container: the emulator
   writes `config` (including its `ca_bundle` path) and `emulator_credentials` there, so the files
   work from macOS unchanged.
+- The port appears in three places (`PORT`, both sides of `-p 127.0.0.1:…`, and the emulator's own
+  `-p`) and they must match, because the emulator writes its port into the files it creates. To
+  run a second emulator, change all three and the folder in the ready script.
 - `-b 0.0.0.0` (in the image) is needed inside the container's VM; `-p 127.0.0.1:…` keeps the port
   reachable from this Mac only. The emulator logs a warning about `0.0.0.0`; that is expected.
 - `--telemetry off` disables the emulator's usage telemetry.
@@ -169,13 +175,41 @@ so re-read the files rather than copying them.
 
 ## Updating the emulator
 
-1. Download the current package and compute its checksum:
+AWS lists published versions in
+[`versions.json`](https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/versions.json)
+(entries such as `1.0.385.1`; the package file for that entry is `aws-emulator-1.0.385-1-aarch64.rpm`).
+See AWS's [Versions and compatibility](https://docs.aws.amazon.com/emulator/latest/userguide/versioning.html)
+before moving to a new minor or major version.
+
+1. Download the package and its detached signature (requires `gpg`, e.g. `brew install gnupg`):
 
    ```sh
-   curl -sO https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/latest/aws-emulator-aarch64.rpm
-   shasum -a 256 aws-emulator-aarch64.rpm
+   PACKAGE_FILE=aws-emulator-1.0.385-1-aarch64.rpm
+   curl -fsSLO https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/$PACKAGE_FILE
+   curl -fsSLO https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/$PACKAGE_FILE.sig
    ```
 
-2. Replace the `sha256:` value in the Dockerfile, rebuild with `container build`, and check
-   `container run --rm aws-emulator:local --version`.
-3. Update the tested version at the top of this recipe.
+2. Verify it against AWS's publishing key:
+
+   ```sh
+   curl -fsSLo aws-publishing.asc https://downloads.aws.com/keys/gpg/current.asc
+   gpg --import aws-publishing.asc
+   gpg --fingerprint ssm-publishing@amazon.com
+   gpg --verify $PACKAGE_FILE.sig $PACKAGE_FILE
+   ```
+
+   The fingerprint must be `98BC F336 A3BE 53B7 34E9 67C5 2E5B F49B D940 F624`, and the output must
+   include `Good signature from "SSM Publishing <ssm-publishing@amazon.com>"`. A warning that the key
+   isn't certified with a trusted signature is expected once the fingerprint matches. If gpg reports
+   `BAD signature` or the fingerprint differs, delete both files and stop.
+
+3. Pin the verified file:
+
+   ```sh
+   shasum -a 256 $PACKAGE_FILE
+   ```
+
+   Put the version in the Dockerfile's `ADD` URL and the hash in its `--checksum=sha256:` value.
+
+4. Rebuild with `container build`, check `container run --rm aws-emulator:local --version`, and
+   update the tested version at the top of this recipe.

@@ -7,7 +7,7 @@ All notable changes to DockGuard are documented in this file.
 ### Added
 - Optional `ready` and `ready_timeout_seconds` settings for `container` targets. After a successful `up`, `start` polls the readiness script once per second, bounds each attempt to five seconds or the remaining overall deadline, and reports whether the service became ready. A timeout exits 1 without stopping the container (D-020 slice 1).
 - Optional `ephemeral` setting for `container` targets. `list` and the dashboard mark the target's state, and a discard notice prints immediately before `down` runs. Stop order, eject readiness, and confirmation behavior are unchanged (D-020 slice 2).
-- Recipe `docs/recipes/aws-emulator.md`: AWS Emulator on Apple `container` as a `ready` + `ephemeral` target, with the package pinned by SHA-256 (D-020 slice 3).
+- Recipe `docs/recipes/aws-emulator.md`: AWS Emulator on Apple `container` as a `ready` + `ephemeral` target, with the package pinned by version and by the SHA-256 of the signature-verified file (D-020 slice 3).
 
 ## [v0.5.1] - 2026-11-12
 
