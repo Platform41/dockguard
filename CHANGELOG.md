@@ -2,7 +2,7 @@
 
 All notable changes to DockGuard are documented in this file.
 
-## [Unreleased]
+## [v0.6.0] - 2026-11-15
 
 ### Added
 - Optional `ready` and `ready_timeout_seconds` settings for `container` targets. After a successful `up`, `start` polls the readiness script once per second, bounds each attempt to five seconds or the remaining overall deadline, and reports whether the service became ready. A timeout exits 1 without stopping the container (D-020 slice 1).
@@ -96,6 +96,7 @@ All notable changes to DockGuard are documented in this file.
 ### Fixed
 - Fixed Docker Desktop settings path matching to support case-insensitive keys such as `DataFolder`.
 
+[v0.6.0]: https://github.com/platform41/dockguard/compare/v0.5.1...v0.6.0
 [v0.5.1]: https://github.com/platform41/dockguard/compare/v0.5.0...v0.5.1
 [v0.5.0]: https://github.com/platform41/dockguard/compare/v0.4.1...v0.5.0
 [v0.4.1]: https://github.com/platform41/dockguard/compare/v0.4.0...v0.4.1
