@@ -1,6 +1,6 @@
 # Proposal — Persistent Volumes on Container Targets
 
-**Status:** Proposed
+**Status:** Approved by Azrad, 2026-11-15
 **Target:** next minor release
 **Owner:** One
 **Builder:** Three
@@ -142,9 +142,9 @@ and `unknown`.
 - Live check (maintainer): add `volumes: [fizzy-mysql]` to the real `fizzy` target; `list` with
   the container system running and stopped.
 
-## 8. Decision requested
+## 8. Approved decision
 
-Approve as D-022:
+Approved as D-022, all three items:
 
 1. persistent volumes shown as information on their container target, not as a separate target;
 2. `volumes` config key resolved under `data_path`, status from disk only;
