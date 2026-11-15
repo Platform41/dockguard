@@ -2,7 +2,7 @@
 
 **Status:** Active
 **Repository:** `dockguard`
-**Last Updated:** 2026-11-08
+**Last Updated:** 2026-11-15
 **Board Owner:** One
 
 ---
@@ -46,18 +46,6 @@
 
 ### This Week
 
-- [ ] `[v0.6.0] Container readiness and ephemeral targets`
-  **Owner:** Three
-  **Priority:** P2
-  **Status:** Approved by Azrad, 2026-11-15; ready for implementation
-  **Outcome:** A `container` target may declare a `ready` script that `start` polls until the
-  service is usable, and an `ephemeral` flag so stop says its data is discarded. Plus an AWS
-  Emulator recipe in `docs/recipes/`.
-  **Proposal:** `docs/specs/container-readiness.md` (AS-46 to AS-59)
-  **Found from live use:** AWS Emulator ran on the T7 via Apple container as a config-only
-  target on 2026-11-15; `start` reported `start requested` with no readiness, and stop silently
-  discards its in-memory resources.
-
 ### Doing
 
 _None._
@@ -74,6 +62,28 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.6.0] Release: container readiness and ephemeral targets`
+  **Owner:** One
+  **Priority:** P2
+  **Completed:** 2026-11-15
+  **Branch:** `chore/release-v0.6.0` (PR #24)
+  **Deliverable:** `docs/releases/v0.6.0.md`, tag `v0.6.0`
+  **Notes:** Release review reran the full Go suite (224 tests), race suite and `go vet` from merged
+  master `9b7ebf8`. Live check with the real `aws-emulator` target passed. New optional keys only.
+
+- [x] `[v0.6.0] Container readiness and ephemeral targets`
+  **Owner:** Three
+  **Priority:** P2
+  **Completed:** 2026-11-15
+  **Branches:** `feat/container-readiness` (PR #21, merge `00e445b`), `feat/ephemeral-targets`
+  (PR #22, merge `364e56c`), `docs/aws-emulator-recipe` (PR #23, merge `9b7ebf8`)
+  **Outcome:** `container` targets may declare a `ready` script polled after `up` within an enforced
+  deadline, and an `ephemeral` flag that marks the state and prints a discard notice immediately
+  before `down`. AWS Emulator recipe pinned by version, checksum and verified signature.
+  **Evidence:** AS-46 to AS-59 covered by tests; full and race suites pass; live T7 checks with a
+  hanging `ready` script, a throwaway ephemeral container and the real `aws-emulator` target.
+  Built by Kimi (PRs #21, #22) and Claude (PR #23), each cross-reviewed by another tool.
 
 - [x] `[v0.5.1] Release: proactive eject readiness`
   **Owner:** One
