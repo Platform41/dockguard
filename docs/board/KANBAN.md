@@ -2,7 +2,7 @@
 
 **Status:** Active
 **Repository:** `dockguard`
-**Last Updated:** 2026-11-15
+**Last Updated:** 2026-11-16
 **Board Owner:** One
 
 ---
@@ -46,39 +46,6 @@
 
 ### This Week
 
-- [ ] `[v0.7.0] Registered drive identity and dockguard mount`
-  **Owner:** Three
-  **Priority:** P2
-  **Status:** Approved by Azrad, 2026-11-15 (D-021); ready for implementation
-  **Outcome:** The drive is registered by volume UUID and counts as mounted only when that volume is
-  mounted at the configured path (stray folder, same-name volume and `/Volumes/<name> 1` are
-  caught). `dockguard drive` prints the registration line; `dockguard mount` and dashboard `m`
-  remount the registered drive in one step. Plug-in behaviour unchanged; no `sudo`.
-  **Proposal:** `docs/specs/drive-identity.md` (AS-60 to AS-77, AS-100 to AS-103)
-  **Found from live use:** After the v0.6.0 live check the T7 was remounted by hand with
-  `diskutil list` and `diskutil mount`; `DriveMounted` only checks that the path is a directory.
-
-- [ ] `[v0.7.0] dockguard version and self-update`
-  **Owner:** Three
-  **Priority:** P3
-  **Status:** Approved by Azrad, 2026-11-15 (D-023); ready for implementation
-  **Outcome:** `dockguard version` prints the build's version (release tag, or development build
-  with commit), checks the latest release through the `go` command, and in a terminal offers
-  `Update to vX? [y/N]`, which runs a pinned `go install`. Network only in `version`.
-  **Proposal:** `docs/specs/version-and-update.md` (AS-88 to AS-99, AS-104)
-  **Requested by:** Azrad, 2026-11-15, to ship with drive identity in v0.7.0.
-
-- [ ] `[next minor] Persistent volumes shown on container targets`
-  **Owner:** Three
-  **Priority:** P3
-  **Status:** Approved by Azrad, 2026-11-15 (D-022); ready for implementation
-  **Outcome:** A `container` target may list its named volumes (`volumes: [fizzy-mysql]`). `list`
-  shows each as a sub-row under its target with present/missing and allocated size, read from
-  `<data_path>/volumes/<name>/volume.img`; `status` shows info lines. Information only: no new
-  target, no state, stop or eject change.
-  **Proposal:** `docs/specs/container-volumes.md` (AS-78 to AS-87)
-  **Requested by:** Azrad, 2026-11-15: the Fizzy MySQL volume isn't visible in `dockguard list`.
-
 ### Doing
 
 _None._
@@ -95,6 +62,48 @@ _None._
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.7.0] Release: drive identity, dockguard version, container volumes`
+  **Owner:** One
+  **Priority:** P2
+  **Completed:** 2026-11-16
+  **Branch:** `chore/release-v0.7.0` (PR #30)
+  **Deliverable:** `docs/releases/v0.7.0.md`, tag `v0.7.0`
+  **Notes:** Release review reran the full Go suite (383 tests), race suite and `go vet` from merged
+  master `93deed5`. Maintainer live checks passed: drive registration, eject, `dockguard mount`,
+  dashboard `m`, `fizzy` volumes with the container system running and stopped.
+
+- [x] `[v0.7.0] Registered drive identity and dockguard mount`
+  **Owner:** Three
+  **Priority:** P2
+  **Completed:** 2026-11-15
+  **Branch:** `feat/drive-identity` (PR #27, merge `3a5544c`)
+  **Outcome:** `drive_uuid` registration; the drive counts as mounted only when that volume is at the
+  configured path, with seven explained statuses and fail-closed eject. `dockguard drive`,
+  `dockguard mount` (90 s limit) and dashboard `m`.
+  **Evidence:** AS-60 to AS-77 and AS-100 to AS-103 covered by tests; read-only live checks of every
+  status on real disks. Built by Codex; reviewed by Claude (one round of fixes).
+
+- [x] `[v0.7.0] dockguard version and self-update`
+  **Owner:** Three
+  **Priority:** P3
+  **Completed:** 2026-11-16
+  **Branch:** `feat/version-command` (PR #28, merge `52a2058`)
+  **Outcome:** `dockguard version` from build info; latest-release check through `go` only in
+  `version`, isolated in a temp directory; TTY-only `[y/N]` pinned `go install` with installed-file
+  verification.
+  **Evidence:** AS-88 to AS-99 and AS-104 covered by tests; live end-to-end update into a scratch
+  `GOBIN` (`n` and `y`). Reviewed by Claude.
+
+- [x] `[v0.7.0] Persistent volumes shown on container targets`
+  **Owner:** Three
+  **Priority:** P3
+  **Completed:** 2026-11-16
+  **Branch:** `feat/container-volumes` (PR #29, merge `93deed5`)
+  **Outcome:** `volumes` on container targets shown as `list` sub-rows and `status` info lines from
+  `stat` only; information only.
+  **Evidence:** AS-78 to AS-87 covered by tests; read-only live check against the real `fizzy-mysql`
+  volume with zero `container volume` calls. Built by Codex; reviewed by Claude.
 
 - [x] `[v0.6.0] Release: container readiness and ephemeral targets`
   **Owner:** One

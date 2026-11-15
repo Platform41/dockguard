@@ -55,7 +55,7 @@ Derived from `stat` of `<data_path>/volumes/<name>/volume.img` only. DockGuard n
 
 | Status | Condition | Shown as |
 | --- | --- | --- |
-| present | Regular file exists | `present, <used>` where `<used>` is the allocated size (`st_blocks × 512`, e.g. `268 MB`), not the sparse logical size |
+| present | Regular file exists | `present, <used>` where `<used>` is the allocated size (`st_blocks × 512`, e.g. `281 MB`), not the sparse logical size |
 | missing | File does not exist | `missing` |
 | unknown | Any other `stat` error | `unknown (<error>)` |
 | drive not mounted | The drive isn't mounted | `drive not mounted`, as targets show today |
@@ -69,7 +69,7 @@ After a target's row, one sub-row per volume, in config order, in the same table
 ```text
 NAME             KIND       STATE              PATH
 fizzy            container  running            /Volumes/ExternalSSD/container-data
-  └ fizzy-mysql  volume     present, 268 MB    /Volumes/ExternalSSD/container-data/volumes/fizzy-mysql
+  └ fizzy-mysql  volume     present, 281 MB    /Volumes/ExternalSSD/container-data/volumes/fizzy-mysql
 warisan-db       postgres   stopped            /Volumes/ExternalSSD/Projects/pgdata/warisan
 ```
 
@@ -83,7 +83,7 @@ Under the target's heading, after its checks, one information line per volume:
 ```text
 fizzy (container): running
 - [ok] …existing checks…
-  volume fizzy-mysql: present, 268 MB (/Volumes/ExternalSSD/container-data/volumes/fizzy-mysql)
+  volume fizzy-mysql: present, 281 MB (/Volumes/ExternalSSD/container-data/volumes/fizzy-mysql)
 ```
 
 Volume lines are not checks: they never change the summary or the exit code, including `missing`
@@ -104,7 +104,7 @@ and `unknown`.
 - `internal/app`: `runList` appends sub-rows; `runStatus` prints info lines. Both skip the lookup
   and print `drive not mounted` when the drive isn't mounted.
 - `internal/output`: a sub-row form of `Row` (name prefix `  └ `, kind `volume`) and a volume info
-  line printer; size formatting in decimal units (`268 MB`, `1.2 GB`).
+  line printer; size formatting in decimal units (`281 MB`, `1.2 GB`).
 
 ## 5. Out of scope
 
@@ -126,7 +126,7 @@ and `unknown`.
 | AS-80 | `stat` fails other than not-exist | Sub-row `unknown (<error>)`; exit code unchanged |
 | AS-81 | Drive not mounted | Sub-row `drive not mounted`; no `stat` attempted |
 | AS-82 | Container system stopped | Status still reported from disk; no `container` CLI call made |
-| AS-83 | Sparse 512 GiB image with 268 MB allocated | Shows allocated size (`268 MB`), not 512 GiB |
+| AS-83 | Sparse 512 GiB image with 281 MB allocated | Shows allocated size (`281 MB`), not 512 GiB |
 | AS-84 | `status` with volumes | One info line per volume after the target's checks; summary and exit code unchanged, also when `missing` |
 | AS-85 | `volumes` without `data_path`, invalid name, duplicate, or on another kind | Config error naming the target and key |
 | AS-86 | Target without `volumes` | `list`/`status` output byte-identical to v0.6.0 |
