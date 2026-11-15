@@ -49,8 +49,17 @@ go list -m -json github.com/platform41/dockguard@latest
 ```
 
 This respects the user's `GOPROXY`, `GOPRIVATE`, `GONOSUMDB` and `GOFLAGS`, including
-`GOPROXY=off`. It runs from a neutral working directory (the user's home) so a `go.mod` in the
-current directory can't affect it, with a 10-second timeout. Measured cost: about 0.1–0.25 s.
+`GOPROXY=off`. It must not be influenced by a `go.mod` or `go.work` the user happens to be in, or
+that sits in their home directory, so DockGuard:
+
+- creates a new empty directory with `os.MkdirTemp`, runs the `go` commands in it, and removes it
+  afterwards, on success, failure and timeout alike;
+- sets `GOWORK=off` for those commands;
+- confirms isolation first: if `go env GOMOD` in that directory isn't `/dev/null` (a `go.mod` in a
+  parent of the temporary directory), it reports `Can't check for updates: couldn't run outside a
+  Go module.` and skips the check.
+
+The check has a 10-second timeout. Measured cost: about 0.1–0.25 s.
 
 | Result | Output | Exit |
 | --- | --- | --- |
@@ -75,7 +84,8 @@ Update to v0.7.0? [y/N]
 
 - Default is **No**. Only `y` or `yes` (any case) updates; anything else, including Enter and EOF,
   prints `Not updated.` and exits 0.
-- On yes: runs exactly that command with the **pinned version** (never `@latest`, so the installed
+- On yes: runs exactly that command, in the same kind of fresh empty temporary directory with
+  `GOWORK=off`, with the **pinned version** (never `@latest`, so the installed
   version is the one shown) and streams its output.
 - **Verification reads the installed file, not the running process.** `runtime/debug.ReadBuildInfo`
   only describes the binary that is running, which is still the old one. After `go install`
@@ -141,6 +151,7 @@ Update to v0.7.0? [y/N]
 | AS-97 | Running build newer than latest release (pseudo-version after the tag) | Treated as up to date; no prompt |
 | AS-98 | Any other command, the dashboard | No `go` invocation, no network |
 | AS-99 | `go install` succeeds but the installed file is missing, unreadable, has no build info, or reports another version | Matching message from §3.3; exit 1; never `Updated` |
+| AS-104 | Run from a directory with a `go.mod`/`go.work`, or with one in `$HOME` | `go` runs in a fresh empty temp dir with `GOWORK=off`, which is removed afterwards (also on failure/timeout); result unaffected; non-`/dev/null` `GOMOD` skips the check with the reason |
 
 ## 7. Test plan
 

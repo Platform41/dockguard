@@ -61,18 +61,31 @@ New optional top-level key `drive_uuid` (a volume UUID, validated as
 `XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX`, case-insensitive; invalid is a config error). The legacy
 v0.1 format does not accept it.
 
-With `drive_uuid` set, DockGuard derives one status from `diskutil info -plist <uuid>` and, when
-needed, `diskutil info -plist <drive>`:
+With `drive_uuid` set, DockGuard derives one status in this order:
+
+1. **Is the volume attached?** `diskutil list -plist` enumerates every attached volume (about
+   0.02 s). If it succeeds and no volume has the registered UUID, the result is a typed
+   **not found** (a sentinel such as `ErrVolumeNotFound`), so the status is `not connected`. If the
+   listing itself fails, times out or can't be parsed, the status is `unknown`. Absence is never
+   inferred from a `diskutil` error message or exit code: an unknown UUID and a `diskutil`
+   failure both exit 1.
+2. **Where is it mounted?** `diskutil info -plist <uuid>` gives its mount point. Any failure here,
+   after step 1 found the volume, is `unknown`.
+3. **What is at the path?** Only when needed, `diskutil info -plist <drive>` identifies a
+   different volume at the configured path; a path that exists but isn't a mount point is a
+   `stray folder`.
+
+Each `diskutil` call has a 5 s timeout.
 
 | Status | Condition | Meaning for DockGuard |
 | --- | --- | --- |
 | `mounted` | The registered volume's mount point is `drive` | Mounted, as today |
 | `not mounted` | Registered volume attached, no mount point | Not mounted; offer `dockguard mount` |
-| `not connected` | `diskutil` can't find the UUID | Not mounted |
+| `not connected` | A successful `diskutil list` has no volume with the UUID | Not mounted |
 | `mounted elsewhere` | Registered volume mounted at another path | Not mounted; name the actual path |
 | `wrong volume` | Another volume is mounted at `drive` | Not mounted; name both UUIDs |
 | `stray folder` | `drive` exists but is not a mount point | Not mounted; explain the folder |
-| `unknown` | `diskutil` missing, failed, timed out (5 s) or returned unparsable output | Not mounted (fail closed); show the error |
+| `unknown` | `diskutil` missing, failed, timed out (5 s) or returned unparsable output, at any step | Not mounted (fail closed); show the error |
 
 Only `mounted` counts as mounted. Everywhere that uses "mounted" today (preflight, `list`,
 `status`, the dashboard, the eject rule) uses this status when `drive_uuid` is set:
@@ -92,7 +105,9 @@ Requires `drive_uuid`. Acts on the status from §3.2:
 | Status before | Action | Output, exit code |
 | --- | --- | --- |
 | `mounted` | none | `ExternalSSD is already mounted at /Volumes/ExternalSSD.`, 0 |
-| `not mounted` | `diskutil mount <uuid>`, then re-read status | `ExternalSSD mounted at /Volumes/ExternalSSD.`, 0 |
+| `not mounted` | Prints `Mounting ExternalSSD…`, runs `diskutil mount <uuid>` (90 s limit), then re-reads status | `ExternalSSD mounted at /Volumes/ExternalSSD.`, 0 |
+| `not mounted`, mount exceeds 90 s | Stops waiting, kills `diskutil`, re-reads status | `ExternalSSD didn't mount within 90 s; drive status: <status>.`, 1 |
+| `not mounted`, `diskutil mount` fails | Re-reads status | `diskutil` error and the drive status, 1 |
 | `not mounted`, then lands elsewhere | none further | `mounted at /Volumes/ExternalSSD 1, not /Volumes/ExternalSSD` with the reason, 1 |
 | `not connected` | none | `ExternalSSD is not connected; plug it in.`, 1 |
 | `mounted elsewhere`, `wrong volume`, `stray folder` | none; refuses before mounting | Explanation naming the paths, 1 |
@@ -101,6 +116,12 @@ Requires `drive_uuid`. Acts on the status from §3.2:
 
 - It never deletes folders, renames volumes, unmounts anything or mounts any other volume.
 - It does not start targets. After mounting, the user runs `start` as usual.
+- **Mount time limit.** `diskutil mount` can be slow: Apple's manual says it gives up after "a
+  maximum of 1 minute in most situations", for example while `fsck_apfs` checks the volume first.
+  DockGuard waits up to **90 s**, longer than `diskutil`'s own limit so its error normally wins.
+  After a timeout DockGuard never reports success: it reports the status it reads afterwards,
+  because macOS may still finish the mount, and the next `list` or dashboard refresh shows the
+  real state.
 
 ### 3.4 Dashboard
 
@@ -110,6 +131,9 @@ Requires `drive_uuid`. Acts on the status from §3.2:
   `not mounted`. It runs the same code as `dockguard mount`, asks no confirmation (mounting is not
   destructive), shows the result in the action output area, and triggers a fresh snapshot. It
   follows the existing rule that probes and actions never overlap.
+- While `m` runs, the dashboard shows its existing `Working…` line and stays responsive; on
+  success or failure, including the 90 s timeout, the result message from §3.3 appears in the
+  action output area and a fresh snapshot follows.
 - The identity lookup joins the existing snapshot work. Measured cost: about 0.06 s per
   `diskutil info` call, well within the three-second refresh.
 
@@ -117,10 +141,13 @@ Requires `drive_uuid`. Acts on the status from §3.2:
 
 - `internal/config`: `DriveUUID string` on `Config`; `drive_uuid` added to the new-format keys;
   validation as in §3.2.
-- `internal/platform`: `VolumeInfo(target string) (Volume, error)` wrapping
-  `diskutil info -plist` with a 5 s timeout (the context-aware runner from v0.6.0), parsing
-  `VolumeUUID`, `VolumeName`, `MountPoint`, `FilesystemType`, `Internal`; and
-  `MountVolume(uuid string) error` wrapping `diskutil mount`. Plist parsed with the standard
+- `internal/platform`: `FindVolume(uuid string) (Volume, error)` built on `diskutil list -plist`
+  and then `diskutil info -plist <uuid>`, returning the sentinel `ErrVolumeNotFound` only when the
+  listing succeeded without that UUID, and any other error for failures; `VolumeAt(path string)`
+  for the path check; both with a 5 s timeout through the context-aware runner from v0.6.0,
+  parsing `VolumeUUID`, `VolumeName`, `MountPoint`, `FilesystemType`, `Internal`; and
+  `MountVolume(ctx, uuid string) error` wrapping `diskutil mount` with the 90 s limit and a
+  distinct timeout error. Plist parsed with the standard
   library (`plutil -convert json` output or `encoding/xml`); no new module dependencies.
 - `internal/checks` (or a small new `internal/drive`): `Status(cfg) DriveStatus` implementing the
   table in §3.2 from injected `VolumeInfo`, so every case is unit-testable without a disk.
@@ -163,10 +190,14 @@ Requires `drive_uuid`. Acts on the status from §3.2:
 | AS-75 | Invalid `drive_uuid` | Config error naming the key |
 | AS-76 | Dashboard, status `not mounted` | Drive line suggests `m`; `m` mounts and refreshes; no confirmation |
 | AS-77 | Dashboard, any other status | `m` inactive and absent from key help; drive line explains the status |
+| AS-100 | `diskutil list` succeeds without the UUID | Typed not-found; status `not connected` |
+| AS-101 | `diskutil list` fails, times out or returns unparsable output (including when `info <uuid>` would say "Could not find disk") | Status `unknown`, never `not connected` |
+| AS-102 | `mount`, `diskutil mount` exceeds 90 s (CLI and dashboard `m`) | `didn't mount within 90 s` with the re-read status; exit 1; never `mounted` unless the re-read status is `mounted` |
+| AS-103 | `mount`, `diskutil mount` fails | `diskutil` error plus the re-read status; exit 1 |
 
 ## 7. Test plan
 
-- Unit tests for every row of §3.2 and §3.3 with an injected `VolumeInfo` / `MountVolume`; no real
+- Unit tests for every row of §3.2 and §3.3 with injected `FindVolume` / `VolumeAt` / `MountVolume`; no real
   disks, no real `diskutil` calls in the suite.
 - Plist parsing tests from captured `diskutil info -plist` output (mounted, unmounted, not a mount
   point, unknown disk).

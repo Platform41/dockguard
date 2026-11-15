@@ -51,7 +51,7 @@
   **Outcome:** `dockguard version` prints the build's version (release tag, or development build
   with commit), checks the latest release through the `go` command, and in a terminal offers
   `Update to vX? [y/N]`, which runs a pinned `go install`. Network only in `version`.
-  **Proposal:** `docs/specs/version-and-update.md` (AS-88 to AS-99)
+  **Proposal:** `docs/specs/version-and-update.md` (AS-88 to AS-99, AS-104)
   **Requested by:** Azrad, 2026-11-15, to ship with drive identity in v0.7.0.
 
 - [ ] `[v0.7.0] Registered drive identity and dockguard mount`
@@ -62,7 +62,7 @@
   mounted at the configured path (stray folder, same-name volume and `/Volumes/<name> 1` are
   caught). `dockguard drive` prints the registration line; `dockguard mount` and dashboard `m`
   remount the registered drive in one step. Plug-in behaviour unchanged; no `sudo`.
-  **Proposal:** `docs/specs/drive-identity.md` (AS-60 to AS-77)
+  **Proposal:** `docs/specs/drive-identity.md` (AS-60 to AS-77, AS-100 to AS-103)
   **Found from live use:** After the v0.6.0 live check the T7 was remounted by hand with
   `diskutil list` and `diskutil mount`; `DriveMounted` only checks that the path is a directory.
 
