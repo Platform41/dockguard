@@ -46,6 +46,28 @@
 
 ### This Week
 
+- [ ] `[v0.7.0] Registered drive identity and dockguard mount`
+  **Owner:** Three
+  **Priority:** P2
+  **Status:** Approved by Azrad, 2026-11-15 (D-021); ready for implementation
+  **Outcome:** The drive is registered by volume UUID and counts as mounted only when that volume is
+  mounted at the configured path (stray folder, same-name volume and `/Volumes/<name> 1` are
+  caught). `dockguard drive` prints the registration line; `dockguard mount` and dashboard `m`
+  remount the registered drive in one step. Plug-in behaviour unchanged; no `sudo`.
+  **Proposal:** `docs/specs/drive-identity.md` (AS-60 to AS-77, AS-100 to AS-103)
+  **Found from live use:** After the v0.6.0 live check the T7 was remounted by hand with
+  `diskutil list` and `diskutil mount`; `DriveMounted` only checks that the path is a directory.
+
+- [ ] `[v0.7.0] dockguard version and self-update`
+  **Owner:** Three
+  **Priority:** P3
+  **Status:** Approved by Azrad, 2026-11-15 (D-023); ready for implementation
+  **Outcome:** `dockguard version` prints the build's version (release tag, or development build
+  with commit), checks the latest release through the `go` command, and in a terminal offers
+  `Update to vX? [y/N]`, which runs a pinned `go install`. Network only in `version`.
+  **Proposal:** `docs/specs/version-and-update.md` (AS-88 to AS-99, AS-104)
+  **Requested by:** Azrad, 2026-11-15, to ship with drive identity in v0.7.0.
+
 - [ ] `[next minor] Persistent volumes shown on container targets`
   **Owner:** Three
   **Priority:** P3
@@ -379,7 +401,9 @@ _None._
 | D-018 | 2026-11-09 | Add a terminal dashboard, `dockguard ui`: live status of the drive, eject readiness and every target, with start/stop/check and stop-all-and-eject actions that reuse the CLI's code paths; stop and eject ask to confirm. Bare `dockguard` still prints usage | Azrad | Inspired by ONCE's dashboard. A native GUI or menu-bar app stays out of scope |
 | D-019 | 2026-11-12 | Eject readiness requires every configured target stopped and a fresh process-holder scan with no holders; inspection failure is unknown, not safe. Dashboard snapshots and eject preflight scan holders; other commands remain unchanged | Azrad | Approved after a live `zsh` current-directory hold prevented T7 eject while the dashboard had no proactive holder state. Spec: `docs/specs/proactive-eject-readiness.md` |
 | D-020 | 2026-11-15 | The `container` kind gets optional `ready` (script polled after `up` until exit 0, `ready_timeout_seconds` default 30, overall deadline enforced via a context-aware detached runner, start only; not-ready exits 1 and leaves the container running) and `ephemeral` (informational marker and discard notice emitted by the container target immediately before `down` runs, existing stop output otherwise unchanged; no additional CLI prompt, dashboard confirmations unchanged, no state or eject change). An AWS Emulator recipe lives in `docs/recipes/`; no AWS-specific kind | Azrad | Approved after AWS Emulator ran on the T7 via Apple container as a config-only target. Spec: `docs/specs/container-readiness.md` |
+| D-021 | 2026-11-15 | The drive may be registered by volume UUID (`drive_uuid`); with it set, the drive counts as mounted only when that volume is mounted at `drive` (statuses: mounted, not mounted, not connected via a successful `diskutil list`, mounted elsewhere, wrong volume, stray folder, unknown; fail closed). Preflight checks it and eject refuses otherwise. Read-only `dockguard drive` prints the line to paste; `dockguard mount` mounts by UUID within 90 s and verifies the path; dashboard `m` only when attached but unmounted. No auto-mount change, no `sudo`, config stays user-owned | Azrad | `DriveMounted` only checked that the path was a directory; the T7 was remounted by hand after the v0.6.0 live check. Cross-reviewed by Codex. Spec: `docs/specs/drive-identity.md` |
 | D-022 | 2026-11-15 | Container targets may list named volumes (`volumes`, requires `data_path`). Volumes are information only, shown as `list` sub-rows and `status` lines with present/missing/unknown and allocated size from `stat` of `<data_path>/volumes/<name>/volume.img`; never a separate lifecycle target, no `container` CLI calls, no state, check, stop, eject or dashboard change | Azrad | Requested because the Fizzy MySQL volume was invisible in `list`; a duplicate DB target was rejected because its state and stop would overlap the stack. Spec: `docs/specs/container-volumes.md` |
+| D-023 | 2026-11-15 | `dockguard version` prints the build's version from build info and checks the latest release with `go list -m …@latest` (only in `version`, in a fresh temp dir with `GOWORK=off`); in a terminal it offers `[y/N]` and runs a pinned `go install`, reporting `Updated` only when the installed file's build info shows the pinned version. Verification follows the user's Go module policy. No other network use, no automatic updates | Azrad | Requested to ship with D-021 in v0.7.0; `go install` is the only distribution channel. Cross-reviewed by Codex. Spec: `docs/specs/version-and-update.md` |
 
 ---
 
