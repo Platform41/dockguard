@@ -2,6 +2,11 @@
 
 All notable changes to DockGuard are documented in this file.
 
+## [Unreleased]
+
+### Added
+- Optional `ready` and `ready_timeout_seconds` settings for `container` targets. After a successful `up`, `start` polls the readiness script once per second, bounds each attempt to five seconds or the remaining overall deadline, and reports whether the service became ready. A timeout exits 1 without stopping the container (D-020 slice 1).
+
 ## [v0.5.1] - 2026-11-12
 
 ### Fixed

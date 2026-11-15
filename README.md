@@ -169,6 +169,8 @@ targets:
     containers: [myapp-db, myapp-web]
     data_path: /Volumes/ExternalSSD/container-data   # optional
     stop_system: true               # optional: also stop Apple container's system service
+    ready: ~/bin/myapp-ready.sh     # optional: poll after up until the service is usable
+    ready_timeout_seconds: 30       # optional: default 30; allowed 1-300
 ```
 
 Unknown keys and kinds are errors. Target names use lowercase letters, digits and `-`. Paths must
@@ -233,6 +235,7 @@ log goes to `log_file`, or `<data_dir>.log` when it isn't set. `stop` runs
 For an Apple `container` stack started and stopped by your own `up` and `down` scripts.
 
 - `up` and `down` exist and are executable; the `container` CLI is on the PATH
+- `ready`, if set, exists and is executable
 - `data_path`, if set, exists and is on the drive
 - Apple container's data folder (`~/Library/Application Support/com.apple.container`) resolves to
   the drive
@@ -242,6 +245,13 @@ For an Apple `container` stack started and stopped by your own `up` and `down` s
 State comes from `container list`: `running` if all of `containers` run, `partial` if some do,
 `stopped` if none do. When the container system is confirmed down (`unregistered`), the stack is
 `stopped`; a system that doesn't answer its health check is `unknown`, which blocks the eject.
+
+With `ready` set, `start` runs the script once per second after `up` succeeds. Each attempt is
+limited to five seconds or the remaining overall deadline, whichever is shorter. The overall
+`ready_timeout_seconds` deadline defaults to 30 seconds and may be from 1 to 300. Success reports
+`started and ready`; timeout reports `started but not ready`, exits 1, and leaves the container
+running. Readiness runs only during start, never during `list`, `status`, or dashboard refreshes.
+Without `ready`, start behavior is unchanged.
 
 Apple container's system service keeps files open on the drive even after a stack stops. With
 `stop_system: true`, `stop` also runs `container system stop`, and a system still running counts as
