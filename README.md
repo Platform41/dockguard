@@ -127,6 +127,7 @@ and refreshes afterward.
 | `dockguard start [target]` | Runs the checks, then starts the target only if they all pass |
 | `dockguard stop [target] [--eject]` | Stops the target; with `--eject`, ejects the drive under the eject rule below |
 | `dockguard stop --all [--eject]` | Stops every target that isn't confirmed stopped, in reverse config order, carrying on past failures; container systems (`stop_system`) last, after every stack; ejects only if all stopped |
+| `dockguard version` | Shows the running version and checks for a newer release. In a terminal, offers a pinned `go install` update and verifies the installed file; defaults to No |
 
 With no target, `check`, `start` and `stop` act on the target named `docker`, so v0.1 commands keep
 working. Every command accepts `--config <path>`.
