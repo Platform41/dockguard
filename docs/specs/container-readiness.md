@@ -96,9 +96,13 @@ aws-emulator:
   `aws-emulator is ephemeral: its data is discarded on stop.`
 - `stop --all [--eject]` prints the same line for every ephemeral target whose `down` script it
   runs.
-- The notice is tied to `down` actually running. A target whose stack is already stopped keeps the
-  existing `… is already stopped.` output and prints no notice. When `stop_system` stops only the
-  shared container system (the stack was already stopped), no notice is printed either.
+- The notice is tied to `down` actually running, and is the only output change. Whenever `down`
+  does not run, each command keeps its existing v0.5.1 output exactly and prints no notice:
+  - fully stopped target (system down): `… is already stopped.`;
+  - single-target `stop` where `stop_system` stops only the shared system (stack already stopped,
+    `Stop()` returns true): `… stop requested.`;
+  - `stop --all` where the stack is already stopped but the system is up: first pass prints
+    `… is already stopped.`, second pass prints `…: container system stop requested.`.
 - No additional CLI confirmation prompt and no new flag; the line is information, and scripts keep
   working. Existing dashboard stop/eject confirmations (`x`, `E`; multi-target spec AS-33) remain
   unchanged.
@@ -130,8 +134,16 @@ Add `docs/recipes/aws-emulator.md` with:
   `runDetachedContext` seam, faked in tests the way `runDetached` is. Derive each attempt's context
   from the overall deadline context with the 5 s cap. Return a typed not-ready error so
   `internal/app` can print the right message and exit code.
-- `internal/app` / `internal/ui`: print the readiness result and the ephemeral notice; render the
-  `(ephemeral)` marker. No new packages.
+- Discard notice ownership: `StopStack()` emits it, immediately before `runDetached(Down)` and
+  after its own stopped-stack probe, so only a real `down` invocation produces it. The app can't do
+  this: `runStop`/`runStopAll` only see the result after `Stop()`/`StopStack()` return. The
+  container target gets an optional callback (for example `OnDiscard func(name string)`) that the
+  app wires to a new `output.PrintEphemeralDiscard`. A callback, not a writer captured at
+  construction, so the dashboard's redirection of `output.Out` still applies at call time. Nil
+  callback or `ephemeral: false` means no notice. `internal/target/container` does not import
+  `internal/output`.
+- `internal/app` / `internal/ui`: print the readiness result and render the `(ephemeral)` marker.
+  They do not print the discard notice. No new packages.
 - Readiness stays in the `container` kind. If another kind needs it later, lift it then.
 
 ## 5. Out of scope
@@ -159,18 +171,21 @@ Add `docs/recipes/aws-emulator.md` with:
 | AS-53 | `ephemeral: true` target listed | State shows `(ephemeral)` |
 | AS-54 | `stop` / `stop --all` on a running ephemeral target | Discard notice printed before `down` runs; no additional CLI prompt; dashboard `x`/`E` confirmations unchanged |
 | AS-55 | `ephemeral` with eject | Eject readiness identical to D-019 |
-| AS-56 | `stop` on an already-stopped ephemeral target, including when `stop_system` stops only the shared system | Existing `already stopped` output; no discard notice |
+| AS-56 | `stop` on a fully stopped ephemeral target (system down) | `… is already stopped.` as in v0.5.1; no discard notice |
 | AS-57 | `ready` script hangs past both the 5 s attempt cap and the overall deadline | Attempt is killed; `start` returns not-ready at `ready_timeout_seconds`, never later |
+| AS-58 | Single-target `stop` on an ephemeral target with `stop_system`, stack already stopped, system up | `… stop requested.` as in v0.5.1; `down` not run; no discard notice |
+| AS-59 | `stop --all` with an ephemeral target whose stack is already stopped and system is up | `… is already stopped.` then `…: container system stop requested.` as in v0.5.1; no discard notice |
 
 ## 7. Test plan
 
-Three starts from failing tests for AS-46 to AS-57:
+Three starts from failing tests for AS-46 to AS-59:
 
 - config tests for the new keys, defaults, `~` expansion and the timeout range;
 - platform tests for the context-aware detached runner: deadline kills a hanging command and is
   reported distinctly from a non-zero exit; output still captured through the temporary file;
 - container target tests using the fake `machine`: ready on attempt N, never ready, per-attempt
-  cap, overall deadline beating the cap, already-stopped ephemeral target, `up` failure short-circuit, no-`ready` regression;
+  cap, overall deadline beating the cap, discard callback invoked only immediately before `down`
+  (fully stopped, single-target system-only and `stop --all` system-only cases call it zero times), `up` failure short-circuit, no-`ready` regression;
 - app/ui tests for messages, exit codes and the `(ephemeral)` marker;
 - live check on the T7 with the `aws-emulator` target: start reports ready; a `ready` script
   pointed at a wrong port times out; a `ready` script that sleeps forever returns at the deadline; stop prints the discard notice; `stop --all --eject` still
