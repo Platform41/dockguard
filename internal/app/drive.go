@@ -18,6 +18,7 @@ var (
 	inspectDrive = drive.Inspect
 	volumeAt     = platform.VolumeAt
 	mountVolume  = platform.MountVolume
+	isMountPoint = platform.IsMountPoint
 )
 
 func driveStatus(cfg config.Config) drive.Status {
@@ -34,7 +35,11 @@ func driveStatus(cfg config.Config) drive.Status {
 func printDriveHeader(cfg config.Config, s drive.Status) {
 	if cfg.DriveUUID == "" {
 		output.PrintHeader(cfg.Path, cfg.Drive, s.Mounted())
-		fmt.Fprintln(output.Out, "Drive not registered; run dockguard drive.")
+		if cfg.Legacy {
+			fmt.Fprintln(output.Out, "Drive not registered; migrate to the current config format (examples/dockguard.yaml), then run dockguard drive.")
+		} else {
+			fmt.Fprintln(output.Out, "Drive not registered; run dockguard drive.")
+		}
 		return
 	}
 	fmt.Fprintf(output.Out, "Config: %s\nDrive:  %s (%s)\n", cfg.Path, cfg.Drive, s.State)
@@ -44,6 +49,13 @@ func printDriveHeader(cfg config.Config, s drive.Status) {
 }
 
 func runDrive(cfg config.Config) (int, error) {
+	mounted, err := isMountPoint(cfg.Drive)
+	if err != nil {
+		return 1, fmt.Errorf("inspect mount point %s: %w", cfg.Drive, err)
+	}
+	if !mounted {
+		return 1, fmt.Errorf("%s is not a mount point", cfg.Drive)
+	}
 	v, err := volumeAt(cfg.Drive)
 	if err != nil {
 		return 1, fmt.Errorf("inspect drive %s: %w", cfg.Drive, err)
@@ -64,6 +76,9 @@ func runDrive(cfg config.Config) (int, error) {
 		}
 	} else {
 		fmt.Fprintln(output.Out, "Status not registered")
+	}
+	if cfg.Legacy {
+		fmt.Fprintln(output.Out, "\nMigrate to the current config format (examples/dockguard.yaml) before adding drive_uuid.")
 	}
 	fmt.Fprintf(output.Out, "\nTo register this drive, add to dockguard.yaml:\ndrive_uuid: %s\n", v.UUID)
 	return 0, nil

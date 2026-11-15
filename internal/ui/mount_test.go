@@ -11,6 +11,9 @@ func TestMountKeyAndHelp(t *testing.T) {
 		f := &fakeCtl{snap: Snapshot{Drive: "/Volumes/ExternalSSD", CanMount: enabled, DriveStatus: "not mounted", DriveMessage: "attached but unmounted"}}
 		m := loaded(f)
 		view := m.View()
+		if enabled && strings.Contains(view, "attached but unmounted") {
+			t.Fatalf("duplicate mount instructions: %s", view)
+		}
 		if strings.Contains(view, "m mount") != enabled {
 			t.Fatalf("enabled %v: %s", enabled, view)
 		}

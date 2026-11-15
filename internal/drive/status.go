@@ -33,13 +33,14 @@ func (s Status) Mounted() bool { return s.State == Mounted }
 
 // Inspector separates OS discovery from the status rules for fake-based tests.
 type Inspector struct {
-	FindVolume func(string) (platform.Volume, error)
-	VolumeAt   func(string) (platform.Volume, error)
-	PathExists func(string) error
+	FindVolume   func(string) (platform.Volume, error)
+	VolumeAt     func(string) (platform.Volume, error)
+	PathExists   func(string) error
+	IsMountPoint func(string) (bool, error)
 }
 
 func Inspect(uuid, path string) Status {
-	return (Inspector{FindVolume: platform.FindVolume, VolumeAt: platform.VolumeAt, PathExists: func(path string) error { _, err := os.Stat(path); return err }}).Status(uuid, path)
+	return (Inspector{FindVolume: platform.FindVolume, VolumeAt: platform.VolumeAt, IsMountPoint: platform.IsMountPoint, PathExists: func(path string) error { _, err := os.Stat(path); return err }}).Status(uuid, path)
 }
 
 func (i Inspector) Status(uuid, path string) Status {
@@ -73,6 +74,13 @@ func (i Inspector) Status(uuid, path string) Status {
 	}
 	if err != nil {
 		return set(Unknown, err.Error())
+	}
+	mounted, err := i.IsMountPoint(path)
+	if err != nil {
+		return set(Unknown, err.Error())
+	}
+	if !mounted {
+		return set(StrayFolder, path+" exists but is not a mount point")
 	}
 	at, err := i.VolumeAt(path)
 	if err != nil {

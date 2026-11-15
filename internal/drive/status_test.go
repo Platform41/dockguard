@@ -37,7 +37,8 @@ func TestStatus(t *testing.T) {
 					atCalls++
 					return platform.Volume{UUID: tt.atUUID, MountPoint: tt.atMount}, tt.atErr
 				},
-				PathExists: func(string) error { return tt.statErr },
+				PathExists:   func(string) error { return tt.statErr },
+				IsMountPoint: func(string) (bool, error) { return tt.name != "stray folder", nil },
 			}
 			got := inspector.Status(uuid, path)
 			if got.State != tt.want || got.Mounted() != (tt.want == Mounted) {
@@ -50,6 +51,25 @@ func TestStatus(t *testing.T) {
 				t.Fatal("queried path after failed discovery")
 			}
 		})
+	}
+}
+
+func TestStrayFolderDoesNotCallDiskutilInfo(t *testing.T) {
+	i := Inspector{
+		FindVolume:   func(string) (platform.Volume, error) { return platform.Volume{UUID: "registered"}, nil },
+		PathExists:   func(string) error { return nil },
+		IsMountPoint: func(string) (bool, error) { return false, nil },
+		VolumeAt: func(string) (platform.Volume, error) {
+			t.Fatal("diskutil info fails on ordinary directories and must not run")
+			return platform.Volume{}, errors.New("Could not find disk")
+		},
+	}
+	if got := i.Status("registered", "/Volumes/ExternalSSD"); got.State != StrayFolder {
+		t.Fatalf("status %+v", got)
+	}
+	i.IsMountPoint = func(string) (bool, error) { return false, errors.New("statfs denied") }
+	if got := i.Status("registered", "/Volumes/ExternalSSD"); got.State != Unknown {
+		t.Fatalf("status %+v", got)
 	}
 }
 

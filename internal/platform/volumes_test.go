@@ -4,9 +4,29 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestVolumeCommandErrorMessage(t *testing.T) {
+	orig := volumeRun
+	defer func() { volumeRun = orig }()
+	for _, tt := range []struct{ out, want string }{
+		{`<?xml version="1.0"?><plist><dict><key>Error</key><true/><key>ErrorMessage</key><string>Could not find disk: /Volumes/ExternalSSD</string></dict></plist>`, "Could not find disk: /Volumes/ExternalSSD"},
+		{" busy \n", "busy"},
+		{"<malformed>", "<malformed>"},
+	} {
+		volumeRun = func(context.Context, string, ...string) (string, int, error) { return tt.out, 1, nil }
+		_, err := VolumeAt("/Volumes/ExternalSSD")
+		if err == nil || err.Error() != "diskutil info exited 1: "+tt.want {
+			t.Fatalf("error %v", err)
+		}
+		if strings.Contains(tt.out, "ErrorMessage") && strings.Contains(err.Error(), "<?xml") {
+			t.Fatal(err)
+		}
+	}
+}
 
 const testVolumeUUID = "11111111-2222-3333-4444-555555555555"
 const volumePlist = `<plist version="1.0"><dict><key>VolumeUUID</key><string>` + testVolumeUUID + `</string><key>VolumeName</key><string>ExternalSSD</string><key>MountPoint</key><string>/Volumes/ExternalSSD</string><key>FilesystemType</key><string>apfs</string><key>Internal</key><false/></dict></plist>`

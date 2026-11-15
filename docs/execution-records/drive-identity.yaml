@@ -6,7 +6,7 @@ risk_reasons:
 behavior_spec: docs/specs/drive-identity.md
 behavior_spec_approved: true
 blueprint_received: n/a
-workflow: Foundation OS feature-delivery
+workflow: feature
 repository_inspection:
   relevant_files_identified: true
   existing_pattern_checked: true
@@ -20,6 +20,8 @@ scope_this_milestone:
   - CLI drive/mount commands, registered preflight, list/status and eject integration.
   - Dashboard status, mount key, busy-action queue and refresh.
   - Acceptance tests, README and CHANGELOG.
+  - Review fixes: local filesystem mount-point detection, readable diskutil errors,
+    concise dashboard mount guidance, and legacy migration guidance.
 test_first: Each new component's tests failed before its production implementation.
 validation:
   domain_logic: pass
@@ -41,4 +43,3 @@ remaining:
   - One reviews implementation PR.
   - Maintainer live acceptance for registration, eject/remount, and dashboard m.
 safety: No real mount/eject, real config reads, or installed-binary changes performed.
-foundation_asset_candidates: []

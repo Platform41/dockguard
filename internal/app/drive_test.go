@@ -70,7 +70,9 @@ func TestRegisteredIdentityFailClosed(t *testing.T) {
 func TestDriveRegistration(t *testing.T) {
 	h := setup(t, true, false, &fake{name: "docker"})
 	old := volumeAt
-	defer func() { volumeAt = old }()
+	oldMountPoint := isMountPoint
+	defer func() { volumeAt = old; isMountPoint = oldMountPoint }()
+	isMountPoint = func(string) (bool, error) { return true, nil }
 	cfg, _ := loadConfig("")
 	volumeAt = func(string) (platform.Volume, error) {
 		return platform.Volume{UUID: registeredUUID, Name: "ExternalSSD", MountPoint: cfg.Drive, Filesystem: "apfs"}, nil
@@ -84,6 +86,29 @@ func TestDriveRegistration(t *testing.T) {
 	}
 	if code, _ := Run([]string{"drive"}); code != 1 {
 		t.Fatal("registered directory on enclosing volume")
+	}
+}
+
+func TestRegistrationRejectsOrdinaryFolderBeforeDiskutil(t *testing.T) {
+	setup(t, true, false, &fake{name: "docker"})
+	oldAt, oldMountPoint := volumeAt, isMountPoint
+	defer func() { volumeAt, isMountPoint = oldAt, oldMountPoint }()
+	isMountPoint = func(string) (bool, error) { return false, nil }
+	volumeAt = func(string) (platform.Volume, error) {
+		t.Fatal("must not inspect non-mount point with diskutil")
+		return platform.Volume{}, nil
+	}
+	code, err := Run([]string{"drive"})
+	if code != 1 || err == nil || !strings.Contains(err.Error(), "not a mount point") {
+		t.Fatalf("%d %v", code, err)
+	}
+}
+
+func TestLegacyHintExplainsMigration(t *testing.T) {
+	h := setup(t, true, true, &fake{name: "docker", checksOK: true, states: states(target.Stopped)})
+	Run([]string{"list"})
+	if !strings.Contains(h.out.String(), "current config format") || strings.Contains(h.out.String(), "Drive not registered; run dockguard drive.") {
+		t.Fatal(h.out)
 	}
 }
 

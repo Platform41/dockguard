@@ -366,7 +366,7 @@ func (m Model) View() string {
 		label := "not mounted"
 		if m.snap.DriveStatus != "" {
 			label = m.snap.DriveStatus
-			if m.snap.DriveMessage != "" {
+			if m.snap.DriveMessage != "" && !m.snap.CanMount {
 				label += " — " + m.snap.DriveMessage
 			}
 		}

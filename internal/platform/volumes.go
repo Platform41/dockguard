@@ -122,7 +122,13 @@ func volumeCommand(parent context.Context, timeout time.Duration, args ...string
 		return "", fmt.Errorf("diskutil %s: %w", args[0], err)
 	}
 	if code != 0 {
-		return "", fmt.Errorf("diskutil %s exited %d: %s", args[0], code, strings.TrimSpace(out))
+		message := strings.TrimSpace(out)
+		if values, parseErr := parsePlist(out); parseErr == nil {
+			if explanation, ok := values["ErrorMessage"].(string); ok && strings.TrimSpace(explanation) != "" {
+				message = strings.TrimSpace(explanation)
+			}
+		}
+		return "", fmt.Errorf("diskutil %s exited %d: %s", args[0], code, message)
 	}
 	return out, nil
 }
