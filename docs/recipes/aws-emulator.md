@@ -156,12 +156,37 @@ service too.
 
 ## 4. Clients
 
-Point the AWS CLI or an SDK at the files the emulator generates on each start:
+**Set all of these in the same shell or script that runs your code or tests.** If
+`AWS_ENDPOINT_URL` is missing, the AWS CLI and SDKs call **real AWS** with whatever credentials
+they find. These values come from AWS's
+[Pointing your AWS SDK at AWS Emulator](https://docs.aws.amazon.com/emulator/latest/userguide/point-sdk-to-emulator.html):
 
 ```sh
-export AWS_CONFIG_FILE=~/.aws/emulator/9297/config
+export AWS_ENDPOINT_URL=https://127.0.0.1:9297
 export AWS_SHARED_CREDENTIALS_FILE=~/.aws/emulator/9297/emulator_credentials
+export AWS_CONFIG_FILE=~/.aws/emulator/9297/config
+export AWS_CA_BUNDLE=~/.aws/emulator/9297/ca.pem
+export AWS_EC2_METADATA_DISABLED=true
+export AWS_DISABLE_HOST_PREFIX_INJECTION=true
+export AWS_REGION=us-east-1
+export AWS_DEFAULT_REGION=us-east-1
 
+# Environment credentials take precedence over the credentials file: remove real ones.
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE
+```
+
+- Keep `127.0.0.1` in `AWS_ENDPOINT_URL`, not `localhost`: S3 requests then put the bucket name in
+  the path, which the emulator requires.
+- `AWS_CA_BUNDLE` covers the AWS CLI, Boto3 and the Go SDK. Other SDKs need their own trust
+  setting; see AWS's page.
+- `AWS_CONFIG_FILE` replaces your own AWS config for that shell, and the emulator rewrites the file on
+  every start. Don't edit it; copy it if you need extra settings.
+- The keys change on every start, so always read them from the files rather than copying them.
+- Don't keep real AWS credentials in the environment of test jobs.
+
+Then:
+
+```sh
 aws s3 mb s3://demo
 aws dynamodb create-table --table-name demo \
   --attribute-definitions AttributeName=id,AttributeType=S \
@@ -169,9 +194,6 @@ aws dynamodb create-table --table-name demo \
 aws dynamodb wait table-exists --table-name demo   # tables start as CREATING, as on AWS
 aws sqs create-queue --queue-name demo
 ```
-
-These replace your normal AWS configuration only in that shell. The keys change on every start,
-so re-read the files rather than copying them.
 
 ## Updating the emulator
 
