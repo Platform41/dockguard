@@ -158,8 +158,11 @@ Update to v0.7.0? [y/N]
 - Unit tests for version formatting from fake build info (release, pseudo clean/modified,
   `(devel)`), semver comparison including pseudo-versions (AS-97), and `go list` JSON parsing.
 - App tests with injected runner, TTY check, input and installed-file reader for AS-88 to AS-96
-  and AS-99; a fake runner asserting
-  zero `go` calls from other commands (AS-98).
+  and AS-99; a fake runner asserting zero `go` calls from other commands (AS-98).
+- Isolation tests for AS-104 with an injected runner and temp-dir seam: every `go` command runs in a
+  fresh empty temporary directory with `GOWORK=off` in its environment; a non-`/dev/null` `GOMOD`
+  refuses the check with the reason and runs no `go list`; the temporary directory is removed after
+  success, after a failed command, and after a timeout.
 - Live check (maintainer), right after tagging `v0.7.0`: run a build from the release candidate
   commit (pseudo-version `v0.6.1-0.…`, which sorts below `v0.7.0`); `dockguard version` offers
   `v0.7.0`; answer `n` (nothing changes), then `y`; `dockguard version` then reports `v0.7.0` and

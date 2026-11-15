@@ -150,7 +150,8 @@ Requires `drive_uuid`. Acts on the status from §3.2:
   distinct timeout error. Plist parsed with the standard
   library (`plutil -convert json` output or `encoding/xml`); no new module dependencies.
 - `internal/checks` (or a small new `internal/drive`): `Status(cfg) DriveStatus` implementing the
-  table in §3.2 from injected `VolumeInfo`, so every case is unit-testable without a disk.
+  table in §3.2 from injected `FindVolume` and `VolumeAt`, so every case is unit-testable without a
+  disk.
 - `internal/app`: replace direct `driveMounted(cfg.Drive)` calls with a function that uses the
   status when `drive_uuid` is set and the existing directory check otherwise; add `drive` and
   `mount` commands; the dashboard controller exposes a mount action.
@@ -199,9 +200,15 @@ Requires `drive_uuid`. Acts on the status from §3.2:
 
 - Unit tests for every row of §3.2 and §3.3 with injected `FindVolume` / `VolumeAt` / `MountVolume`; no real
   disks, no real `diskutil` calls in the suite.
+- Plist parsing tests from captured `diskutil list -plist` output, which owns the not-connected
+  decision: registered UUID present, absent (yields `ErrVolumeNotFound`), and malformed or
+  truncated data (yields an error, never not-found) (AS-100, AS-101).
 - Plist parsing tests from captured `diskutil info -plist` output (mounted, unmounted, not a mount
   point, unknown disk).
-- App and UI tests for AS-62 to AS-77, including the `m` gate and the eject refusal.
+- `MountVolume` tests with an injected runner: success, `diskutil` failure, and a run past the 90 s
+  limit using an injectable deadline, each followed by the status re-read (AS-102, AS-103).
+- App and UI tests for AS-62 to AS-77 and AS-102/AS-103 through the CLI and dashboard `m`,
+  including the `m` gate and the eject refusal.
 - Live check on the T7 (maintainer): register; `list`; eject via `stop --all --eject`;
   `dockguard mount` remounts at the same path; dashboard `m` after a dashboard eject; a stray folder
   test is optional and needs the drive disconnected.
