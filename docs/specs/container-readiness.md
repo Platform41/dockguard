@@ -8,10 +8,10 @@
 
 ## 1. Context
 
-AWS released AWS Emulator on 2026-11-14: a local, account-free AWS API endpoint (S3, DynamoDB,
-SQS and others) shipped as a Linux aarch64 RPM. On 2026-11-15 it was run on the T7 through Apple
-container with no Docker involved, and wired into DockGuard as a configuration-only `container`
-target:
+AWS Emulator is a local, account-free AWS API endpoint (S3, DynamoDB, SQS and others) shipped as
+a Linux aarch64 RPM. On 2026-11-15 the build then served as `LTS/latest` (`aws-emulator --version`:
+release date 2026.11.14, commit `813af48`) was run on the T7 through Apple container with no Docker
+involved, and wired into DockGuard as a configuration-only `container` target:
 
 ```yaml
 aws-emulator:
@@ -69,7 +69,10 @@ aws-emulator:
 - `ready` is a script, matching the `up`/`down` pattern. DockGuard does not learn HTTP, TLS or CA
   handling; the script does (`curl --cacert … /__admin/health`).
 - After `up` succeeds, DockGuard runs `ready` once per second until it exits 0 or the timeout
-  passes. Each attempt has its own bounded timeout (5 s).
+  passes. Each attempt is bounded by 5 s or the time left before the overall deadline, whichever
+  is shorter; the overall deadline always wins. An attempt that hits its bound is killed and
+  counts as not ready. A stuck `ready` script can never block `start` past
+  `ready_timeout_seconds`.
 - Success: `aws-emulator started and ready (2.1 s).`
 - Timeout: `aws-emulator started but not ready after 30 s.` and exit 1. DockGuard does **not**
   stop the container automatically; the user decides, and `stop` behaves as today.
@@ -89,10 +92,16 @@ aws-emulator:
 ```
 
 - `list` and the dashboard mark the target: `aws-emulator  container  running (ephemeral)`.
-- `stop` prints, before stopping: `aws-emulator is ephemeral: its data is discarded on stop.`
-- `stop --all [--eject]` prints the same line for every ephemeral target it stops.
-- No confirmation prompt and no new flag. DockGuard stays non-interactive; the line is
-  information, and scripts keep working.
+- `stop` prints, before running the target's `down` script:
+  `aws-emulator is ephemeral: its data is discarded on stop.`
+- `stop --all [--eject]` prints the same line for every ephemeral target whose `down` script it
+  runs.
+- The notice is tied to `down` actually running. A target whose stack is already stopped keeps the
+  existing `… is already stopped.` output and prints no notice. When `stop_system` stops only the
+  shared container system (the stack was already stopped), no notice is printed either.
+- No additional CLI confirmation prompt and no new flag; the line is information, and scripts keep
+  working. Existing dashboard stop/eject confirmations (`x`, `E`; multi-target spec AS-33) remain
+  unchanged.
 - `ephemeral` changes no state logic, eject readiness or stop ordering.
 
 ### 3.3 AWS Emulator recipe (docs only)
@@ -111,8 +120,15 @@ Add `docs/recipes/aws-emulator.md` with:
 
 - `internal/config`: add `Ready string`, `ReadyTimeoutSeconds int`, `Ephemeral bool` to
   `config.Container`; validate the timeout range and expand `~` like `up`/`down`.
-- `internal/target/container`: after a successful `up`, poll `ready` through the existing
-  `runDetached` seam so tests fake it as they fake `up`/`down`. Return a typed not-ready error so
+- `internal/platform`: add a context-aware variant of `RunDetached` (for example
+  `RunDetachedContext(ctx, name, args...)`) built on `exec.CommandContext`. It keeps the
+  temporary-file output handling, so a child that inherits stdout/stderr can't hold a pipe open,
+  and reports a deadline as its own error, distinct from a non-zero exit. The existing
+  `RunDetached` (no timeout, used by `up`/`down`/`pg_ctl`) is unchanged. Killing the attempt must
+  not leave the poll loop waiting on the child's descendants.
+- `internal/target/container`: after a successful `up`, poll `ready` through a new
+  `runDetachedContext` seam, faked in tests the way `runDetached` is. Derive each attempt's context
+  from the overall deadline context with the 5 s cap. Return a typed not-ready error so
   `internal/app` can print the right message and exit code.
 - `internal/app` / `internal/ui`: print the readiness result and the ephemeral notice; render the
   `(ephemeral)` marker. No new packages.
@@ -141,19 +157,23 @@ Add `docs/recipes/aws-emulator.md` with:
 | AS-51 | `ready_timeout_seconds` outside 1–300 | Config error naming the target and key |
 | AS-52 | `list` / dashboard with `ready` set | `ready` is not executed |
 | AS-53 | `ephemeral: true` target listed | State shows `(ephemeral)` |
-| AS-54 | `stop` / `stop --all` on ephemeral target | Discard notice printed before stopping; no prompt |
+| AS-54 | `stop` / `stop --all` on a running ephemeral target | Discard notice printed before `down` runs; no additional CLI prompt; dashboard `x`/`E` confirmations unchanged |
 | AS-55 | `ephemeral` with eject | Eject readiness identical to D-019 |
+| AS-56 | `stop` on an already-stopped ephemeral target, including when `stop_system` stops only the shared system | Existing `already stopped` output; no discard notice |
+| AS-57 | `ready` script hangs past both the 5 s attempt cap and the overall deadline | Attempt is killed; `start` returns not-ready at `ready_timeout_seconds`, never later |
 
 ## 7. Test plan
 
-Three starts from failing tests for AS-46 to AS-55:
+Three starts from failing tests for AS-46 to AS-57:
 
 - config tests for the new keys, defaults, `~` expansion and the timeout range;
+- platform tests for the context-aware detached runner: deadline kills a hanging command and is
+  reported distinctly from a non-zero exit; output still captured through the temporary file;
 - container target tests using the fake `machine`: ready on attempt N, never ready, per-attempt
-  timeout, `up` failure short-circuit, no-`ready` regression;
+  cap, overall deadline beating the cap, already-stopped ephemeral target, `up` failure short-circuit, no-`ready` regression;
 - app/ui tests for messages, exit codes and the `(ephemeral)` marker;
 - live check on the T7 with the `aws-emulator` target: start reports ready; a `ready` script
-  pointed at a wrong port times out; stop prints the discard notice; `stop --all --eject` still
+  pointed at a wrong port times out; a `ready` script that sleeps forever returns at the deadline; stop prints the discard notice; `stop --all --eject` still
   ejects.
 
 ## 8. Release

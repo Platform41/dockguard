@@ -53,7 +53,7 @@
   **Outcome:** A `container` target may declare a `ready` script that `start` polls until the
   service is usable, and an `ephemeral` flag so stop says its data is discarded. Plus an AWS
   Emulator recipe in `docs/recipes/`.
-  **Proposal:** `docs/specs/container-readiness.md` (AS-46 to AS-55)
+  **Proposal:** `docs/specs/container-readiness.md` (AS-46 to AS-57)
   **Found from live use:** AWS Emulator ran on the T7 via Apple container as a config-only
   target on 2026-11-15; `start` reported `start requested` with no readiness, and stop silently
   discards its in-memory resources.
@@ -357,7 +357,7 @@ _None._
 | D-017 | 2026-11-09 | The `container` kind gets an optional `stop_system` key: stop also runs `container system stop` (refusing while containers outside the stack run), and a running system makes a stopped stack `partial` so it blocks eject. A stopped system means the stack is `stopped` | Azrad | Found while building v0.4.0: `fizzy-down.sh` stops the containers but the container system keeps files open on the drive, and `container list` fails once the system is stopped |
 | D-018 | 2026-11-09 | Add a terminal dashboard, `dockguard ui`: live status of the drive, eject readiness and every target, with start/stop/check and stop-all-and-eject actions that reuse the CLI's code paths; stop and eject ask to confirm. Bare `dockguard` still prints usage | Azrad | Inspired by ONCE's dashboard. A native GUI or menu-bar app stays out of scope |
 | D-019 | 2026-11-12 | Eject readiness requires every configured target stopped and a fresh process-holder scan with no holders; inspection failure is unknown, not safe. Dashboard snapshots and eject preflight scan holders; other commands remain unchanged | Azrad | Approved after a live `zsh` current-directory hold prevented T7 eject while the dashboard had no proactive holder state. Spec: `docs/specs/proactive-eject-readiness.md` |
-| D-020 | 2026-11-15 | The `container` kind gets optional `ready` (script polled after `up` until exit 0, `ready_timeout_seconds` default 30, start only; not-ready exits 1 and leaves the container running) and `ephemeral` (informational marker and discard notice on stop; no prompt, no state or eject change). An AWS Emulator recipe lives in `docs/recipes/`; no AWS-specific kind | Azrad | Approved after AWS Emulator ran on the T7 via Apple container as a config-only target. Spec: `docs/specs/container-readiness.md` |
+| D-020 | 2026-11-15 | The `container` kind gets optional `ready` (script polled after `up` until exit 0, `ready_timeout_seconds` default 30, overall deadline enforced via a context-aware detached runner, start only; not-ready exits 1 and leaves the container running) and `ephemeral` (informational marker and discard notice only when `down` runs; no additional CLI prompt, dashboard confirmations unchanged, no state or eject change). An AWS Emulator recipe lives in `docs/recipes/`; no AWS-specific kind | Azrad | Approved after AWS Emulator ran on the T7 via Apple container as a config-only target. Spec: `docs/specs/container-readiness.md` |
 
 ---
 
