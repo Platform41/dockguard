@@ -206,6 +206,7 @@ targets:
     down: ~/bin/myapp-down.sh
     containers: [myapp-db, myapp-web]
     data_path: /Volumes/ExternalSSD/container-data   # optional
+    volumes: [myapp-mysql]           # optional: persistent volume information; requires data_path
     stop_system: true               # optional: also stop Apple container's system service
     ready: ~/bin/myapp-ready.sh     # optional: poll after up until the service is usable
     ready_timeout_seconds: 30       # optional: default 30; allowed 1-300
@@ -217,6 +218,22 @@ Immediately before `down` runs, DockGuard prints `<target> is ephemeral: its dat
 stop.` A stopped stack or a system-only stop does not run `down`, so it prints no discard notice.
 The flag adds no confirmation prompt and does not change stop order, eject readiness, or the
 existing dashboard stop and eject confirmations.
+
+For persistent storage, list named volumes on the owning `container` target, for
+example `volumes: [fizzy-mysql]` on the Fizzy stack. `dockguard list` shows a
+sub-row per volume; `dockguard status` shows information lines after the stack's
+checks. DockGuard reads `<data_path>/volumes/<name>/volume.img` directly, so this
+works even when the container system is stopped. `present, 268 MB` reports
+allocated disk space in decimal units, rather than the sparse image's logical
+capacity. A missing file shows `missing`; other lookup errors show `unknown`.
+An unmounted or unverified drive shows `drive not mounted` without looking up
+volume files.
+
+`volumes` requires `data_path`. Names use letters, digits, `_`, `-`, and `.`,
+start with a letter or digit, and cannot contain `..` or duplicates. A volume is
+information under its stack: it does not change target state, check results,
+summary, exit codes, startup, shutdown, eject safety, or dashboard rows. A volume
+name cannot be used as a target, and DockGuard never creates or deletes volumes.
 
 For a worked example with `ready` and `ephemeral`, see
 [AWS Emulator as a `container` target](docs/recipes/aws-emulator.md).

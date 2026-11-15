@@ -1,0 +1,27 @@
+task: persistent volumes on container targets
+date: 2026-11-16
+persona: Three
+workflow: feature
+task_class: feature
+risk: low
+risk_reasons:
+  - Read-only stat and informational output; no lifecycle or storage mutations.
+approved_input: docs/specs/container-volumes.md
+decision: D-022
+base: 52a2058
+branch: feat/container-volumes
+implementation:
+  - Validate container-only named volumes with required data_path.
+  - Stat volume.img through an injectable seam and report allocated blocks times 512.
+  - Add list subrows and status info lines without changing exit codes or target states.
+  - Use the merged registered-drive mounted predicate and skip lookup when unverified.
+  - Preserve data_path symlink/.. semantics and no-volumes output from the merged baseline.
+validation:
+  test_first: config, stat and output tests failed before implementation
+  unit_suite: pass
+  race_suite: pass
+  go_vet: pass
+  gofmt: pass
+  live_check: pending maintainer — real Fizzy volume with container system running and stopped
+completion_status: implemented — validation blocked
+architecture_decision_required: false
