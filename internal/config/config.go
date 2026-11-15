@@ -37,6 +37,7 @@ const (
 var plannedKinds = map[string]string{}
 
 var targetNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+var volumeNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 
 // Config is a loaded config file.
 type Config struct {
@@ -99,6 +100,7 @@ type Container struct {
 	Up, Down   string
 	Containers []string
 	DataPath   string
+	Volumes    []string
 	// StopSystem also stops Apple container's system service on stop.
 	StopSystem bool
 	// Ready is polled after up when set. ReadyTimeoutSeconds defaults to 30.
@@ -305,7 +307,7 @@ var allowedKeys = map[string][]string{
 	KindDockerDesktop: {"kind", "storage_path", "settings_path", "require_cli_start_support", "fail_if_already_running", "minimum_free_space_gb"},
 	KindApp:           {"kind", "app", "process", "symlink_paths", "fail_if_already_running"},
 	KindPostgres:      {"kind", "data_dir", "bin_dir", "port", "socket_dir", "log_file", "fail_if_already_running"},
-	KindContainer:     {"kind", "up", "down", "containers", "data_path", "stop_system", "fail_if_already_running", "ready", "ready_timeout_seconds", "ephemeral"},
+	KindContainer:     {"kind", "up", "down", "containers", "data_path", "stop_system", "fail_if_already_running", "ready", "ready_timeout_seconds", "ephemeral", "volumes"},
 }
 
 func parseTarget(name string, node *yaml.Node, defaultFreeGB int) (Target, error) {
@@ -510,6 +512,7 @@ type containerKeys struct {
 	Down                 string   `yaml:"down"`
 	Containers           []string `yaml:"containers"`
 	DataPath             string   `yaml:"data_path"`
+	Volumes              []string `yaml:"volumes"`
 	StopSystem           *bool    `yaml:"stop_system"`
 	FailIfAlreadyRunning *bool    `yaml:"fail_if_already_running"`
 	Ready                string   `yaml:"ready"`
@@ -518,6 +521,22 @@ type containerKeys struct {
 }
 
 func parseContainer(name string, node *yaml.Node) (Target, error) {
+	volumesSpecified := false
+	for i := 0; i < len(node.Content); i += 2 {
+		if node.Content[i].Value != "volumes" {
+			continue
+		}
+		list := node.Content[i+1]
+		volumesSpecified = true
+		if list.Kind != yaml.SequenceNode {
+			return Target{}, errors.New("volumes must be a list of names")
+		}
+		for _, v := range list.Content {
+			if v.Kind != yaml.ScalarNode || v.Tag != "!!str" {
+				return Target{}, errors.New("volumes entries must be strings")
+			}
+		}
+	}
 	var keys containerKeys
 	if err := node.Decode(&keys); err != nil {
 		return Target{}, err
@@ -530,6 +549,20 @@ func parseContainer(name string, node *yaml.Node) (Target, error) {
 		Ready:               cleanPath(keys.Ready),
 		ReadyTimeoutSeconds: 30,
 		Ephemeral:           boolOr(keys.Ephemeral, false),
+		Volumes:             keys.Volumes,
+	}
+	if volumesSpecified && c.DataPath == "" {
+		return Target{}, errors.New("volumes requires data_path")
+	}
+	seenVolumes := map[string]bool{}
+	for _, name := range c.Volumes {
+		if !volumeNamePattern.MatchString(name) || strings.Contains(name, "..") {
+			return Target{}, fmt.Errorf("volumes has invalid name %q", name)
+		}
+		if seenVolumes[name] {
+			return Target{}, fmt.Errorf("volumes lists %q twice", name)
+		}
+		seenVolumes[name] = true
 	}
 	if keys.ReadyTimeoutSeconds != nil {
 		if *keys.ReadyTimeoutSeconds < 1 || *keys.ReadyTimeoutSeconds > 300 {

@@ -280,6 +280,9 @@ func runList(cfg config.Config, entries []entry) (int, error) {
 			state += " (ephemeral)"
 		}
 		rows = append(rows, output.Row{Name: e.t.Name(), Kind: e.t.Kind(), State: state, Path: e.t.MainPath()})
+		for _, v := range volumeStatuses(e, mounted) {
+			rows = append(rows, output.Row{Name: v.Name, Kind: "volume", State: volumeLabel(v), Path: v.Path, Subrow: true})
+		}
 	}
 	output.PrintList(rows)
 	return 0, nil
@@ -309,6 +312,9 @@ func runStatus(cfg config.Config, entries []entry) (int, error) {
 
 		items := preflightWithDrive(cfg, e, false, ds)
 		output.PrintItems(items)
+		for _, v := range volumeStatuses(e, mounted) {
+			output.PrintVolumeInfo(v.Name, volumeLabel(v), v.Path)
+		}
 		if !checks.AllOK(items) {
 			ready = false
 		}

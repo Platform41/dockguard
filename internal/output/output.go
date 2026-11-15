@@ -59,6 +59,7 @@ func PrintLegacyNotice() {
 // Row is one line of dockguard list.
 type Row struct {
 	Name, Kind, State, Path string
+	Subrow                  bool
 }
 
 // PrintList prints the target table.
@@ -67,9 +68,34 @@ func PrintList(rows []Row) {
 	w := tabwriter.NewWriter(Out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "NAME\tKIND\tSTATE\tPATH")
 	for _, r := range rows {
+		if r.Subrow {
+			r.Name = "  └ " + r.Name
+		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.Name, r.Kind, r.State, r.Path)
 	}
 	_ = w.Flush()
+}
+
+// FormatAllocatedSize uses decimal units, not a sparse file's logical capacity.
+func FormatAllocatedSize(bytes int64) string {
+	if bytes < 1000 {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	value := float64(bytes)
+	units := []string{"B", "KB", "MB", "GB", "TB", "PB", "EB"}
+	unit := 0
+	for value >= 1000 && unit < len(units)-1 {
+		value /= 1000
+		unit++
+	}
+	if value < 10 {
+		return strings.TrimSuffix(fmt.Sprintf("%.1f", value), ".0") + " " + units[unit]
+	}
+	return fmt.Sprintf("%.0f %s", value, units[unit])
+}
+
+func PrintVolumeInfo(name, state, path string) {
+	fmt.Fprintf(Out, "  volume %s: %s (%s)\n", name, state, path)
 }
 
 // PrintTargetHeading starts a target's section in status.
