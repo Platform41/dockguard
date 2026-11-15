@@ -17,6 +17,7 @@ type readinessFake struct {
 	*fake
 	elapsed        time.Duration
 	startErr       error
+	readiness      bool
 	readinessCalls int
 }
 
@@ -30,8 +31,11 @@ func (f *readinessFake) StartWithReadiness() (time.Duration, error) {
 	return f.elapsed, f.startErr
 }
 
+func (f *readinessFake) ReadinessEnabled() bool { return f.readiness }
+
 func setupReadiness(t *testing.T, f *readinessFake, ready bool) *harness {
 	t.Helper()
+	f.readiness = ready
 	h := setup(t, true, false, f.fake)
 	buildTargets = func(cfg config.Config) ([]entry, error) {
 		tc := cfg.Targets[0]

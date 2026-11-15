@@ -223,6 +223,11 @@ func (t *Target) Start() error {
 	return err
 }
 
+// ReadinessEnabled reports whether this target has a readiness script to poll after start.
+func (t *Target) ReadinessEnabled() bool {
+	return t.cfg.Container.Ready != ""
+}
+
 // StartWithReadiness runs up, then polls ready once per second until success or the overall
 // deadline. A not-ready result never stops the container.
 func (t *Target) StartWithReadiness() (time.Duration, error) {
@@ -238,6 +243,7 @@ func (t *Target) StartWithReadiness() (time.Duration, error) {
 	started := now()
 	timeout := time.Duration(c.ReadyTimeoutSeconds) * time.Second
 	deadline := started.Add(timeout)
+	// Deadline arithmetic uses injectable now; contexts use the wall clock (identical in production).
 	overall, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
 

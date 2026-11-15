@@ -311,6 +311,7 @@ func runCheck(cfg config.Config, e entry) (int, error) {
 
 // readinessStarter keeps readiness local to container targets instead of widening target.Target.
 type readinessStarter interface {
+	ReadinessEnabled() bool
 	StartWithReadiness() (time.Duration, error)
 }
 
@@ -323,11 +324,7 @@ func runStart(cfg config.Config, e entry) (int, error) {
 		return 1, fmt.Errorf("refusing to start %s because preflight checks failed", display(e))
 	}
 
-	if e.cfg.Container != nil && e.cfg.Container.Ready != "" {
-		starter, ok := e.t.(readinessStarter)
-		if !ok {
-			return 1, fmt.Errorf("target %s does not support readiness checks", display(e))
-		}
+	if starter, ok := e.t.(readinessStarter); ok && starter.ReadinessEnabled() {
 		elapsed, err := starter.StartWithReadiness()
 		if err != nil {
 			var notReady *containerkind.NotReadyError
