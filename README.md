@@ -9,10 +9,13 @@ stacks (see [`docs/specs/multi-target.md`](docs/specs/multi-target.md)).
 ## Quickstart
 
 1. Create `~/.config/dockguard/dockguard.yaml` from [`examples/dockguard.yaml`](examples/dockguard.yaml).
-2. See what DockGuard manages: `dockguard list`.
-3. Check everything is ready: `dockguard status`.
-4. Start safely: `dockguard start docker`.
-5. Stop and eject: `dockguard stop docker --eject`.
+2. Register your drive (recommended): run `dockguard drive` and add the `drive_uuid:` line it prints
+   to the config.
+3. See what DockGuard manages: `dockguard list`.
+4. Check everything is ready: `dockguard status`.
+5. Start safely: `dockguard start docker`.
+6. Stop and eject: `dockguard stop docker --eject`. After an eject, `dockguard mount` brings the
+   drive back without unplugging it.
 
 ## Install
 
@@ -21,6 +24,15 @@ With Go 1.23 or later on macOS, install the latest release:
 ```bash
 go install github.com/platform41/dockguard/cmd/dockguard@latest
 ```
+
+### Updating
+
+From v0.7.0 on, `dockguard version` shows the version you're running and, in a terminal, offers to
+update when a newer release exists (`Update to vX? [y/N]`, default No). It runs the same pinned
+`go install` and reports `Updated` only after checking the installed file. Older versions don't
+have this command: run the `go install …@latest` line above once.
+
+### From source
 
 Or from a clone of this repo:
 
@@ -65,6 +77,35 @@ Build a local binary:
 ```bash
 go build -o ./bin/dockguard ./cmd/dockguard
 ```
+
+## Upgrading to v0.7.0
+
+v0.7.0 adds drive registration, one-step remounting, self-update and persistent volume display. Your
+existing config keeps working unchanged; each step below is optional.
+Full list: [release notes](docs/releases/v0.7.0.md) · [CHANGELOG](CHANGELOG.md).
+
+1. **Update DockGuard.** From v0.6.0 or earlier:
+
+   ```bash
+   go install github.com/platform41/dockguard/cmd/dockguard@latest
+   dockguard version      # confirms v0.7.0; future updates are offered here
+   ```
+
+2. **Register your drive.** `dockguard drive` prints the volume's identity and a `drive_uuid:` line.
+   Add that line next to `drive:` in your config. From then on DockGuard trusts only that volume at
+   that path: a leftover empty folder, a different drive with the same name, or the drive mounting
+   as `/Volumes/<name> 1` is reported and treated as not mounted, and eject refuses an unverified
+   volume. See [Commands](#commands) for every drive status.
+3. **Remount without unplugging.** After an eject, run `dockguard mount`, or press `m` in
+   `dockguard ui` when the drive line says `press m to mount`. See [Dashboard](#dashboard).
+4. **Show persistent volumes.** For an Apple `container` stack, list its named volumes, for example
+   `volumes: [fizzy-mysql]` (requires `data_path`). `dockguard list` then shows each volume under
+   its stack with its size on disk. Information only; start, stop and eject are unchanged. See
+   [Configuration](#configuration).
+
+Already on v0.6.0 features? `ready` and `ephemeral` for container targets are covered in
+[Configuration](#configuration) and [Container checks](#container-checks), with a worked example in
+[the AWS Emulator recipe](docs/recipes/aws-emulator.md).
 
 ## Prerequisites
 
@@ -160,6 +201,12 @@ It refreshes target and process-holder state every 3 seconds. `safe to eject` me
 passed; failure to inspect holders is shown as unknown. The keys run the same code as the matching
 commands: `s` start, `x` stop, `c` check, `E` stop everything and eject. Stopping and ejecting ask
 you to confirm.
+
+With a registered drive (`drive_uuid`), the Drive line explains any problem, such as
+`○ mounted elsewhere — registered volume mounted at /Volumes/ExternalSSD 1, not /Volumes/ExternalSSD`. When the drive is attached but unmounted, for example
+right after `E`, it reads `○ not mounted — press m to mount`, and `m` runs `dockguard mount`
+without a confirmation (mounting changes no data), then refreshes. `m` is shown and active only in
+that state.
 
 ## Configuration
 
