@@ -44,6 +44,17 @@
 
 ### Backlog
 
+- [ ] `[next minor] Persistent volumes shown on container targets`
+  **Owner:** Three
+  **Priority:** P3
+  **Status:** Proposed; sponsor decision pending
+  **Outcome:** A `container` target may list its named volumes (`volumes: [fizzy-mysql]`). `list`
+  shows each as a sub-row under its target with present/missing and allocated size, read from
+  `<data_path>/volumes/<name>/volume.img`; `status` shows info lines. Information only: no new
+  target, no state, stop or eject change.
+  **Proposal:** `docs/specs/container-volumes.md` (AS-78 to AS-87)
+  **Requested by:** Azrad, 2026-11-15: the Fizzy MySQL volume isn't visible in `dockguard list`.
+
 ### This Week
 
 ### Doing
