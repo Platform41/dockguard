@@ -2,7 +2,7 @@
 
 All notable changes to DockGuard are documented in this file.
 
-## [Unreleased]
+## [v0.7.0] - 2026-11-16
 
 ### Added
 - Optional `volumes` on `container` targets shows named persistent volumes as `list` sub-rows and `status` information lines, including allocated disk size read directly from each `volume.img`. Missing or unreadable volumes are informational; lifecycle, dashboard and eject behavior are unchanged (D-022).
@@ -104,6 +104,7 @@ All notable changes to DockGuard are documented in this file.
 ### Fixed
 - Fixed Docker Desktop settings path matching to support case-insensitive keys such as `DataFolder`.
 
+[v0.7.0]: https://github.com/platform41/dockguard/compare/v0.6.0...v0.7.0
 [v0.6.0]: https://github.com/platform41/dockguard/compare/v0.5.1...v0.6.0
 [v0.5.1]: https://github.com/platform41/dockguard/compare/v0.5.0...v0.5.1
 [v0.5.0]: https://github.com/platform41/dockguard/compare/v0.4.1...v0.5.0
