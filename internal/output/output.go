@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/platform41/dockguard/internal/checks"
 )
@@ -111,6 +113,18 @@ func PrintEjectRefused(drive string, blockers []Blocker) {
 
 func PrintStarted(display string) {
 	fmt.Fprintf(Out, "%s start requested.\n", display)
+}
+
+func PrintStartedReady(display string, elapsed time.Duration) {
+	fmt.Fprintf(Out, "%s started and ready (%s s).\n", display, formatSeconds(elapsed))
+}
+
+func PrintStartedNotReady(display string, timeout time.Duration) {
+	fmt.Fprintf(Out, "%s started but not ready after %s s.\n", display, formatSeconds(timeout))
+}
+
+func formatSeconds(duration time.Duration) string {
+	return strings.TrimSuffix(fmt.Sprintf("%.1f", duration.Seconds()), ".0")
 }
 
 func PrintStopped(display string) {
