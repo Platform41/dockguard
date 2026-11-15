@@ -58,6 +58,17 @@
 
 ### This Week
 
+- [ ] `[next minor] Persistent volumes shown on container targets`
+  **Owner:** Three
+  **Priority:** P3
+  **Status:** Approved by Azrad, 2026-11-15 (D-022); ready for implementation
+  **Outcome:** A `container` target may list its named volumes (`volumes: [fizzy-mysql]`). `list`
+  shows each as a sub-row under its target with present/missing and allocated size, read from
+  `<data_path>/volumes/<name>/volume.img`; `status` shows info lines. Information only: no new
+  target, no state, stop or eject change.
+  **Proposal:** `docs/specs/container-volumes.md` (AS-78 to AS-87)
+  **Requested by:** Azrad, 2026-11-15: the Fizzy MySQL volume isn't visible in `dockguard list`.
+
 ### Doing
 
 _None._
@@ -380,6 +391,7 @@ _None._
 | D-018 | 2026-11-09 | Add a terminal dashboard, `dockguard ui`: live status of the drive, eject readiness and every target, with start/stop/check and stop-all-and-eject actions that reuse the CLI's code paths; stop and eject ask to confirm. Bare `dockguard` still prints usage | Azrad | Inspired by ONCE's dashboard. A native GUI or menu-bar app stays out of scope |
 | D-019 | 2026-11-12 | Eject readiness requires every configured target stopped and a fresh process-holder scan with no holders; inspection failure is unknown, not safe. Dashboard snapshots and eject preflight scan holders; other commands remain unchanged | Azrad | Approved after a live `zsh` current-directory hold prevented T7 eject while the dashboard had no proactive holder state. Spec: `docs/specs/proactive-eject-readiness.md` |
 | D-020 | 2026-11-15 | The `container` kind gets optional `ready` (script polled after `up` until exit 0, `ready_timeout_seconds` default 30, overall deadline enforced via a context-aware detached runner, start only; not-ready exits 1 and leaves the container running) and `ephemeral` (informational marker and discard notice emitted by the container target immediately before `down` runs, existing stop output otherwise unchanged; no additional CLI prompt, dashboard confirmations unchanged, no state or eject change). An AWS Emulator recipe lives in `docs/recipes/`; no AWS-specific kind | Azrad | Approved after AWS Emulator ran on the T7 via Apple container as a config-only target. Spec: `docs/specs/container-readiness.md` |
+| D-022 | 2026-11-15 | Container targets may list named volumes (`volumes`, requires `data_path`). Volumes are information only, shown as `list` sub-rows and `status` lines with present/missing/unknown and allocated size from `stat` of `<data_path>/volumes/<name>/volume.img`; never a separate lifecycle target, no `container` CLI calls, no state, check, stop, eject or dashboard change | Azrad | Requested because the Fizzy MySQL volume was invisible in `list`; a duplicate DB target was rejected because its state and stop would overlap the stack. Spec: `docs/specs/container-volumes.md` |
 
 ---
 
