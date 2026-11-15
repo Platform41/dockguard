@@ -15,8 +15,12 @@ GitHub. Updating means remembering the `go install …@version` line from the RE
 
 - `dockguard version` prints the running version, checks for a newer release, and, in an
   interactive terminal, offers to update: `Update to v0.7.0? [y/N]`. Answering `y` installs it.
-- No new download channel: the update is the same `go install` the README documents, verified by
-  the Go checksum database. DockGuard never contacts the network except when `version` runs.
+- No new download channel: the update is the same `go install` the README documents, and the
+  module is verified under the user's configured Go module verification policy. With Go's defaults
+  for a public module that means the public checksum database (`sum.golang.org`); `GOSUMDB`,
+  `GONOSUMDB` or `GOPRIVATE` can change or bypass it, and DockGuard does not override them or
+  claim a verification the user's settings didn't perform. DockGuard never contacts the network except when `version`
+  runs.
 
 ## 3. Product behaviour
 
@@ -72,9 +76,22 @@ Update to v0.7.0? [y/N]
 - Default is **No**. Only `y` or `yes` (any case) updates; anything else, including Enter and EOF,
   prints `Not updated.` and exits 0.
 - On yes: runs exactly that command with the **pinned version** (never `@latest`, so the installed
-  version is the one shown), streams its output, then reads the installed binary's build info and
-  confirms: `Updated to v0.7.0.` Exit 0. If `go install` fails, its output is shown and the exit
-  code is 1; the running binary is untouched.
+  version is the one shown) and streams its output.
+- **Verification reads the installed file, not the running process.** `runtime/debug.ReadBuildInfo`
+  only describes the binary that is running, which is still the old one. After `go install`
+  succeeds, DockGuard reads the build info of the file at the install path with
+  `debug/buildinfo.ReadFile` and claims success only when that file's module version equals the
+  pinned version:
+
+  | Installed file | Output | Exit |
+  | --- | --- | --- |
+  | Reports the pinned version | `Updated to v0.7.0.` | 0 |
+  | Missing | `go install finished, but <path> doesn't exist; not updated.` | 1 |
+  | Unreadable or has no build info | `go install finished, but <path> can't be verified: <error>.` | 1 |
+  | Reports another version | `go install finished, but <path> reports vX, not v0.7.0.` | 1 |
+
+  If `go install` itself fails, its output is shown and the exit code is 1; nothing is verified.
+  In no case does DockGuard say `Updated` without the file reporting the pinned version.
 - **Install location.** Go installs to `GOBIN`, or `$(go env GOPATH)/bin`. If the running binary
   (`os.Executable`, symlinks resolved) is a different file, the prompt says so before asking:
   `You're running /usr/local/bin/dockguard; the update goes to /Users/me/go/bin/dockguard and
@@ -90,7 +107,9 @@ Update to v0.7.0? [y/N]
   an injectable runner for `go list -m -json`; `Newer(current, latest) bool` using semver
   comparison (`golang.org/x/mod/semver`, the Go team's module, is acceptable as the only new
   dependency; a small in-tree comparer is also acceptable); `InstallPath()` from `go env GOBIN
-  GOPATH`.
+  GOPATH`; `Installed(path) (Info, error)` via `debug/buildinfo.ReadFile` for post-update
+  verification (standard library), behind an injectable seam so tests cover missing, unreadable,
+  no-build-info and wrong-version files.
 - `internal/app`: `version` command; prompt through an injectable reader/TTY check so tests drive
   yes/no/EOF without a terminal; `go install` through the context-aware runner.
 - Uses only the `go` command for network access; DockGuard opens no sockets itself.
@@ -112,7 +131,7 @@ Update to v0.7.0? [y/N]
 | --- | --- | --- |
 | AS-88 | Release build, latest equals current | Version line; `You're on the latest release`; no prompt; exit 0 |
 | AS-89 | Development build (pseudo-version, clean and modified) | Version line labelled development build with commit and `, modified` when dirty |
-| AS-90 | Newer release, terminal, answer `y` | Runs `go install …@<pinned version>`; verifies; `Updated to vX`; exit 0 |
+| AS-90 | Newer release, terminal, answer `y`, installed file reports the pinned version | Runs `go install …@<pinned version>`; reads the installed file's build info; `Updated to vX`; exit 0 |
 | AS-91 | Newer release, terminal, answer Enter, `n`, other text or EOF | `Not updated.`; no `go install`; exit 0 |
 | AS-92 | Newer release, not a terminal | No prompt; prints the `go install` command; exit 0 |
 | AS-93 | `go` not on the PATH | Version line and `Can't check for updates…`; exit 0 |
@@ -121,12 +140,14 @@ Update to v0.7.0? [y/N]
 | AS-96 | `go install` fails | Its output shown; exit 1; running binary unchanged |
 | AS-97 | Running build newer than latest release (pseudo-version after the tag) | Treated as up to date; no prompt |
 | AS-98 | Any other command, the dashboard | No `go` invocation, no network |
+| AS-99 | `go install` succeeds but the installed file is missing, unreadable, has no build info, or reports another version | Matching message from §3.3; exit 1; never `Updated` |
 
 ## 7. Test plan
 
 - Unit tests for version formatting from fake build info (release, pseudo clean/modified,
   `(devel)`), semver comparison including pseudo-versions (AS-97), and `go list` JSON parsing.
-- App tests with injected runner, TTY check and input for AS-88 to AS-96; a fake runner asserting
+- App tests with injected runner, TTY check, input and installed-file reader for AS-88 to AS-96
+  and AS-99; a fake runner asserting
   zero `go` calls from other commands (AS-98).
 - Live check (maintainer), right after tagging `v0.7.0`: run a build from the release candidate
   commit (pseudo-version `v0.6.1-0.…`, which sorts below `v0.7.0`); `dockguard version` offers

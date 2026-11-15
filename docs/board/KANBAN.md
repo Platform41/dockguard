@@ -51,7 +51,7 @@
   **Outcome:** `dockguard version` prints the build's version (release tag, or development build
   with commit), checks the latest release through the `go` command, and in a terminal offers
   `Update to vX? [y/N]`, which runs a pinned `go install`. Network only in `version`.
-  **Proposal:** `docs/specs/version-and-update.md` (AS-88 to AS-98)
+  **Proposal:** `docs/specs/version-and-update.md` (AS-88 to AS-99)
   **Requested by:** Azrad, 2026-11-15, to ship with drive identity in v0.7.0.
 
 - [ ] `[v0.7.0] Registered drive identity and dockguard mount`
