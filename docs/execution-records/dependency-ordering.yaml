@@ -1,0 +1,41 @@
+task: target dependencies, slice 2
+date: 2026-11-19
+decision: D-024
+approved_spec: docs/specs/target-dependencies.md
+base: 8fde420
+branch: feat/dependency-ordering
+risk: medium
+risk_reasons:
+  - Shared prerequisites must stay running when a dependent fails to stop.
+  - Dashboard confirmation must authorize only the targets shown to the user.
+implementation:
+  - Reverse dependency ordering with reverse config priority among ready independent targets.
+  - Confirm stops before continuing; failures protect all transitive prerequisites and prevent eject.
+  - Preserve the legacy system pass only without an explicit container-system target.
+  - Mixed depends_on and stop_system configs order targets first, then use the unchanged legacy pass.
+  - Record the approved mixed-mode clarification in spec sections 3.4 and 3.6.
+  - Dashboard dependency labels, asynchronous read-only plans and existing pending confirmations.
+  - Reject changed dependency sets before executing a confirmed dashboard action.
+  - One deprecation line per stop_system target in list and status.
+  - Correct singular and plural dependent notices.
+  - Update README, example config and emulator recipe for explicit shared-system dependencies.
+scenario_tests:
+  AS-105-to-AS-116-and-AS-120: Existing config, system-target and CLI acceptance suite rerun; map in target-dependencies-slice-1.yaml.
+  AS-117: TestStopAllDependencyOrderAndEject, TestStopAllFailureProtectsTransitiveDependencies, TestStopAllDependenciesWithLegacySystemPass, TestStopAllProtectsLegacySystemOfFailedDependent, TestExplicitSystemDisablesLegacyPass
+  AS-118: TestStopAllDependencyOrderAndEject and the existing holder/drive/eject refusal suite
+  AS-119: TestStopSystemDeprecationInListAndStatus, TestStopAllDependenciesWithLegacySystemPass, TestLegacyStopAllOutputUnchanged and existing shared-system regressions
+  AS-121: TestDependencyConfirmationCancelAndAccept, TestUnknownDependencyIsNotOffered, TestDependencyPlanWaitsForInFlightRefresh, TestPastedStartAndYesCannotApproveDependencies, TestPlanWithNoStartDependenciesRunsNamedTarget, TestDashboardPlansAndRunsConfirmedDependencyActions, TestDashboardChangedDependenciesRequireNewConsent, TestDashboardSnapshotIncludesDependencies, TestViewShowsDependencyAfterKind
+  AS-122: TestLegacyStopAllOutputUnchanged, TestNoDependenciesPreservesSingleTargetStopOutput and the existing command regression suite
+  carried_review_finding: TestStopDependentNoticeAgreesWithCount
+validation:
+  test_first: Ordering, compatibility, deprecation and singular grammar cases failed before implementation; dashboard interface/acceptance tests preceded wiring.
+  go_test: 492 passed in 18 packages
+  go_test_race: 492 passed in 18 packages
+  go_vet: pass
+  gofmt: clean
+  diff_check: pass
+  terminal_smoke: Built dashboard in Rex with fake container and holder executables and scratch state; dependency label, start prompt, stop prompt and singular notice verified at 80 columns.
+  cancellation: Both prompts canceled; no fake action or script executed; scratch dashboard exited afterward.
+  live_actions: None; no real eject, target start/stop or user-config modification.
+review_status: pending
+release_status: No merge, tag or release.

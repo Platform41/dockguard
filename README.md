@@ -78,6 +78,20 @@ Build a local binary:
 go build -o ./bin/dockguard ./cmd/dockguard
 ```
 
+## Upgrading to v0.8.0 (when released)
+
+v0.8.0 makes shared prerequisites explicit with `depends_on` and the new
+`container-system` kind. Start and stop ask before acting on additional targets;
+without a terminal they refuse with commands to run. The dashboard asks the same
+questions. See [Target dependencies](#target-dependencies).
+
+Existing configs keep working for this release. If you use `stop_system`, `list`
+and `status` show a deprecation line for each target using it. Follow
+[Migrating from `stop_system`](#migrating-from-stop_system) before its removal in
+the release after v0.8.0. This changes your config and scripts; updating the binary
+alone does not migrate them. Once v0.8.0 is released, update with `dockguard version`
+or the `go install` command above.
+
 ## Upgrading to v0.7.0
 
 v0.7.0 adds drive registration, one-step remounting, self-update and persistent volume display. Your
@@ -165,9 +179,9 @@ and refreshes afterward.
 | `dockguard list` | Lists the configured targets with their state (running, partial, stopped or unknown) and path. Runs no checks. |
 | `dockguard status` | Every target's state and checks. Exits 0 when every target is ready. A running target counts as ready; one whose state can't be read doesn't. |
 | `dockguard check [target]` | Runs one target's checks, including the already-running guard |
-| `dockguard start [target]` | Runs the checks, then starts the target only if they all pass |
-| `dockguard stop [target] [--eject]` | Stops the target; with `--eject`, ejects the drive under the eject rule below |
-| `dockguard stop --all [--eject]` | Stops every target that isn't confirmed stopped, in reverse config order, carrying on past failures; container systems (`stop_system`) last, after every stack; ejects only if all stopped |
+| `dockguard start [target]` | Checks dependencies first; asks before starting missing prerequisites, then runs the target's checks and starts it only if they pass |
+| `dockguard stop [target] [--eject]` | Asks before also stopping active dependents; with `--eject`, applies the eject rule below |
+| `dockguard stop --all [--eject]` | Stops dependents before prerequisites, with reverse config priority for independent targets; carries on with independent targets after failure, protecting prerequisites still in use; any failure prevents eject |
 | `dockguard version` | Shows the running version and checks for a newer release. In a terminal, offers a pinned `go install` update and verifies the installed file; defaults to No |
 
 With no target, `check`, `start` and `stop` act on the target named `docker`, so v0.1 commands keep
@@ -200,7 +214,12 @@ unknown and DockGuard refuses the eject. There's no override flag.
 It refreshes target and process-holder state every 3 seconds. `safe to eject` means both checks
 passed; failure to inspect holders is shown as unknown. The keys run the same code as the matching
 commands: `s` start, `x` stop, `c` check, `E` stop everything and eject. Stopping and ejecting ask
-you to confirm.
+you to confirm. Dependencies appear dimmed after the kind, for example
+`container  → container`. `s` asks before starting missing prerequisites and `x`
+asks before stopping active dependents, using the same questions as the CLI.
+Press a fresh `y`/`Y` to accept; any other key cancels without changing targets.
+Unknown prerequisite state refuses rather than offering a start. If the targets
+needing action change while a confirmation is open, retry to confirm the new set.
 
 With a registered drive (`drive_uuid`), the Drive line explains any problem, such as
 `○ mounted elsewhere — registered volume mounted at /Volumes/ExternalSSD 1, not /Volumes/ExternalSSD`. When the drive is attached but unmounted, for example
@@ -247,14 +266,18 @@ targets:
     socket_dir: /tmp                # optional
     log_file: /Volumes/ExternalSSD/pgdata/myapp.log  # optional; defaults to <data_dir>.log
 
+  container:
+    kind: container-system
+    data_path: /Volumes/ExternalSSD/container-data   # optional
+
   myapp-stack:
     kind: container
-    up: ~/bin/myapp-up.sh           # your scripts start and stop the stack
+    depends_on: [container]
+    up: ~/bin/myapp-up.sh           # starts only the stack, not the shared system
     down: ~/bin/myapp-down.sh
     containers: [myapp-db, myapp-web]
     data_path: /Volumes/ExternalSSD/container-data   # optional
     volumes: [myapp-mysql]           # optional: persistent volume information; requires data_path
-    stop_system: true               # optional: also stop Apple container's system service
     ready: ~/bin/myapp-ready.sh     # optional: poll after up until the service is usable
     ready_timeout_seconds: 30       # optional: default 30; allowed 1-300
     ephemeral: true                 # optional: warn that down discards this stack's data
@@ -287,6 +310,78 @@ For a worked example with `ready` and `ephemeral`, see
 
 Unknown keys and kinds are errors. Target names use lowercase letters, digits and `-`. Paths must
 be absolute or start with `~/`.
+
+### Target dependencies
+
+Every kind accepts an optional `depends_on: [target-name, ...]`. Names must exist;
+self references, duplicate entries and cycles are config errors. A cycle is shown
+in order, such as `a → b → a`. A `container-system` target manages Apple's shared
+container service; container stacks should declare it as a prerequisite.
+
+One command acts on one target by default. For a stopped prerequisite:
+
+```text
+$ dockguard start myapp-stack
+myapp-stack needs container, which is stopped.
+Start container first? [y/N]
+```
+
+Only `y`/`yes`, in any case, proceeds. Enter, other text and EOF mean No.
+DockGuard runs each missing prerequisite's preflight and starts it deepest first,
+confirming it running before continuing. Running prerequisites are left alone;
+an unknown prerequisite refuses with its probe error, without a question. A failed
+preflight, start or running-state confirmation stops the sequence.
+
+Without a terminal, or after No, a single missing prerequisite prints:
+
+```text
+Not started. Start it first: dockguard start container
+```
+
+For a chain the question lists the order (`Start base, then container, first? [y/N]`).
+Refusal lists only missing prerequisites, deepest first, one command per line:
+
+```text
+Not started. Start these first, in order:
+  dockguard start base
+  dockguard start container
+```
+
+Stopping a prerequisite asks `Stop them first? [y/N]` when active targets depend
+on it, directly or through a chain. Running, partial and unknown dependents count.
+On yes, dependents stop in reverse dependency order and must be confirmed stopped
+before the next action. On No or without a terminal, the message is
+`Not stopped. Stop these first: myapp-stack, other-stack`; nothing stops.
+
+`stop --all` needs no prompts. Targets stop in reverse dependency order;
+among targets ready to stop, the last configured target goes first. A failure or
+unconfirmed stop leaves all of that target's prerequisites alone and reports them,
+while independent targets can still stop. Any failure prevents eject. With no
+dependencies, this is the previous reverse config order. Configs without an explicit
+`container-system` target retain the legacy shared-system pass after all targets,
+including when they declare dependencies.
+
+### Migrating from `stop_system`
+
+1. Add one shared target, for example `container: {kind: container-system}`. Set its
+   optional `data_path` as in the example above.
+2. Add `depends_on: [container]` to each container stack that uses it.
+3. Remove `container system start` from those stacks' `up` scripts. Their scripts
+   should start only their own containers.
+4. Remove `stop_system` from every stack. A config with a `container-system` target
+   and `stop_system: true` anywhere is rejected, naming the conflicting target.
+
+Use `dockguard start <stack>` to be asked before starting the shared system, and
+`dockguard stop container` to be asked before stopping its dependents. Stopping a
+stack alone leaves the system running; that running system blocks eject. Use
+`stop --all --eject` to stop everything in dependency order and apply the eject rule.
+
+For this release, unmigrated configs keep `stop_system` behaviour: two target/system
+passes, with target dependencies honored in the first pass. `list` and `status`
+print, once per target using it:
+`stop_system is deprecated; add a container-system target and depends_on (see README).`
+Without `depends_on`, stop ordering and command output remain as in v0.7.x apart
+from these deprecation notices. `stop_system` is removed in the release after v0.8.0.
 
 **v0.1 configs still work.** A file with `external_mount_path`, `docker_storage_path` and
 `docker_desktop:` is read as a single `docker` target, and `status` suggests the new format.
@@ -366,9 +461,18 @@ running. Readiness runs only during start, never during `list`, `status`, or das
 Without `ready`, start behavior is unchanged.
 
 Apple container's system service keeps files open on the drive even after a stack stops. With
-`stop_system: true`, `stop` also runs `container system stop`, and a system still running counts as
-`partial`, so it blocks the eject. Because stopping the system stops every container, DockGuard
-refuses (and names them) while containers outside the stack are running.
+the `container-system` kind, `start` runs `container system start` and confirms
+`running`; `stop` runs `container system stop`. Its checks require the CLI on the
+PATH and Apple's data folder on the drive, plus the usual `data_path` checks when
+set. State is running, stopped (`unregistered`) or unknown. A running or unknown
+system blocks eject. Stop refuses and names unmanaged active containers: names not
+listed in any configured stack's `containers` list. Because the system is shared,
+declare `depends_on` on every stack using it.
+
+Legacy `stop_system: true` is deprecated but still works for this release: stop
+also stops the service, and a running system makes an otherwise stopped stack
+`partial`. Its existing safety rule still refuses while containers outside that
+stack run. See [Migrating from `stop_system`](#migrating-from-stop_system).
 
 ## Common Failures
 

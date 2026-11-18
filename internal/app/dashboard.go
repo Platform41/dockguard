@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -106,6 +107,7 @@ func (c *controller) Snapshot() ui.Snapshot {
 	}
 	for i, e := range c.entries {
 		s.Rows[i] = ui.Row{Name: e.t.Name(), Kind: e.t.Kind(), Path: e.t.MainPath()}
+		s.Rows[i].DependsOn = append([]string{}, e.cfg.DependsOn...)
 		if e.cfg.Container != nil {
 			s.Rows[i].Ephemeral = e.cfg.Container.Ephemeral
 		}
@@ -139,6 +141,32 @@ func diskUsage(path string) (usedPct float64, freeGB, totalGB uint64) {
 }
 
 func (c *controller) Run(action ui.Action, name string) (bool, string) {
+	return c.run(action, name, nil)
+}
+
+func (c *controller) Plan(action ui.Action, name string) (ui.Confirmation, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := find(c.entries, name)
+	if !ok {
+		return ui.Confirmation{}, fmt.Errorf("unknown target %q", name)
+	}
+	var p dependencyPlan
+	var err error
+	switch action {
+	case ui.Start:
+		p, err = planStart(c.entries, e)
+	case ui.Stop:
+		p, err = planStop(c.entries, e)
+	}
+	return ui.Confirmation{Action: action, Target: name, Question: p.question, Detail: p.detail, Targets: append([]string{}, p.names...)}, err
+}
+
+func (c *controller) RunConfirmed(action ui.Action, name string, approval ui.Confirmation) (bool, string) {
+	return c.run(action, name, &approval)
+}
+
+func (c *controller) run(action ui.Action, name string, approval *ui.Confirmation) (bool, string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -146,6 +174,9 @@ func (c *controller) Run(action ui.Action, name string) (bool, string) {
 	previous := output.Out
 	output.Out = &buf
 	defer func() { output.Out = previous }()
+	confirm := func(p dependencyPlan) bool {
+		return approval != nil && approval.Action == action && approval.Target == name && approval.Question == p.question && slices.Equal(approval.Targets, p.names)
+	}
 
 	var code int
 	var err error
@@ -160,9 +191,9 @@ func (c *controller) Run(action ui.Action, name string) (bool, string) {
 		}
 		switch action {
 		case ui.Start:
-			code, err = startWithDependencies(c.cfg, c.entries, e, declineDependency)
+			code, err = startWithDependencies(c.cfg, c.entries, e, confirm)
 		case ui.Stop:
-			code, err = stopWithDependencies(c.cfg, c.entries, e, false, declineDependency)
+			code, err = stopWithDependencies(c.cfg, c.entries, e, false, confirm)
 		case ui.Check:
 			code, err = runCheck(c.cfg, e)
 		}

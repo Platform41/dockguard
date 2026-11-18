@@ -128,6 +128,11 @@ container stop requested.
 - If a target fails to stop, the targets it depends on are **not** stopped (they're still in use), and
   the run reports both; any failure still means no eject.
 - This replaces the special two-pass rule for shared systems.
+- **Legacy combination (clarified 2026-11-19):** target stops always honor dependency
+  order, including configs that use `depends_on` without a `container-system` target.
+  With no dependencies this is the same reverse config order as v0.7.x. After all
+  target stops, only configs without a `container-system` target run the legacy
+  `StopSystem` pass, with the same conditions, messages and failure handling.
 
 ### 3.5 Dashboard
 
@@ -143,6 +148,10 @@ container stop requested.
   `stop_system` and the two-pass `stop --all`. `list` and `status` print one deprecation line per
   target that uses it: `stop_system is deprecated; add a container-system target and depends_on
   (see README).`
+- When such a config declares `depends_on`, the first pass follows dependency order
+  and protects prerequisites of failed targets; the legacy system pass still runs
+  after all targets. With no `depends_on`, target ordering and output are unchanged
+  from v0.7.x, apart from the stated deprecation lines in `list`/`status`.
 - A config that has a `container-system` target **and** `stop_system: true` anywhere is a config
   error naming the target: the two mechanisms would conflict.
 - `stop_system` is removed in the release after v0.8.0.

@@ -28,10 +28,14 @@ targets:
     socket_dir: /tmp               # optional
     log_file: /Volumes/ExternalSSD/pgdata/myapp.log   # optional; defaults to <data_dir>.log
 
+  container:
+    kind: container-system         # the shared Apple container service
+    data_path: /Volumes/ExternalSSD/container-data   # optional
+
   myapp-stack:
     kind: container                # an Apple container stack with its own scripts
-    up: ~/bin/myapp-up.sh
+    depends_on: [container]
+    up: ~/bin/myapp-up.sh           # starts only the stack, not the system
     down: ~/bin/myapp-down.sh
     containers: [myapp-db, myapp-web]
     data_path: /Volumes/ExternalSSD/container-data   # optional
-    stop_system: true              # optional: also stop Apple container's system service
