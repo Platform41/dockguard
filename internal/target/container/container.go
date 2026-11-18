@@ -4,17 +4,16 @@ package container
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/platform41/dockguard/internal/checks"
 	"github.com/platform41/dockguard/internal/config"
+	"github.com/platform41/dockguard/internal/containerstate"
 	"github.com/platform41/dockguard/internal/platform"
 	"github.com/platform41/dockguard/internal/target"
 )
@@ -96,69 +95,8 @@ func onPath(name string) checks.Item {
 	return checks.Item{Name: name, OK: true, Message: path}
 }
 
-// snapshot is one probe of the container system.
-type snapshot struct {
-	systemUp bool
-	// running holds every running container on the machine, by name.
-	running map[string]bool
-}
-
-// probe reads the container system's status and, when it's up, every container's state.
-//
-// Only a confirmed answer counts. The system is down only when its status is "unregistered": no
-// launchd job exists, so nothing can be running. A registered daemon that fails its health check
-// reports something else, and that stays unknown, which blocks eject.
-func probe() (snapshot, error) {
-	output, code, err := run("container", "system", "status", "--format", "json")
-	if err != nil {
-		return snapshot{}, fmt.Errorf("container system status: %w", err)
-	}
-	var status struct {
-		Status string `json:"status"`
-	}
-	if jsonErr := json.Unmarshal([]byte(output), &status); jsonErr != nil {
-		return snapshot{}, fmt.Errorf("container system status: exit %d, unreadable output: %s", code, strings.TrimSpace(output))
-	}
-	switch {
-	case status.Status == "unregistered":
-		return snapshot{systemUp: false}, nil
-	case status.Status == "running" && code == 0:
-	default:
-		return snapshot{}, fmt.Errorf("container system status: exit %d, status %q", code, status.Status)
-	}
-
-	output, code, err = run("container", "list", "--all", "--format", "json")
-	if err != nil || code != 0 {
-		return snapshot{}, fmt.Errorf("container list: exit %d: %s %v", code, strings.TrimSpace(output), errOrEmpty(err))
-	}
-	// Pointers tell a missing field from an empty one: an entry without an id or a state can't be
-	// matched to the config, so the whole list is treated as unreadable rather than guessed at.
-	var list []struct {
-		ID     *string `json:"id"`
-		Status *struct {
-			State *string `json:"state"`
-		} `json:"status"`
-	}
-	if err := json.Unmarshal([]byte(output), &list); err != nil {
-		return snapshot{}, fmt.Errorf("container list: can't read its JSON: %w", err)
-	}
-	// "[]" decodes to an empty list (no containers); "null" leaves it nil, which is no answer.
-	if list == nil {
-		return snapshot{}, fmt.Errorf("container list: got %q instead of a list", strings.TrimSpace(output))
-	}
-
-	snap := snapshot{systemUp: true, running: map[string]bool{}}
-	for i, c := range list {
-		if c.ID == nil || *c.ID == "" || c.Status == nil || c.Status.State == nil || *c.Status.State == "" {
-			return snapshot{}, fmt.Errorf("container list: entry %d has no id or state", i)
-		}
-		// Anything other than "stopped" (running, starting, stopping...) may be using the drive.
-		if *c.Status.State != "stopped" {
-			snap.running[*c.ID] = true
-		}
-	}
-	return snap, nil
-}
+// probe shares the same fail-closed system snapshot with the standalone system target.
+func probe() (containerstate.Snapshot, error) { return containerstate.Probe(run) }
 
 func errOrEmpty(err error) string {
 	if err == nil {
@@ -168,10 +106,10 @@ func errOrEmpty(err error) string {
 }
 
 // stackState is the state of the stack's own containers.
-func (t *Target) stackState(snap snapshot) target.State {
+func (t *Target) stackState(snap containerstate.Snapshot) target.State {
 	up := 0
 	for _, id := range t.cfg.Container.Containers {
-		if snap.running[id] {
+		if snap.Running[id] {
 			up++
 		}
 	}
@@ -193,7 +131,7 @@ func (t *Target) State() (target.State, error) {
 		return target.Unknown, err
 	}
 	state := t.stackState(snap)
-	if state == target.Stopped && snap.systemUp && t.cfg.Container.StopSystem {
+	if state == target.Stopped && snap.SystemUp && t.cfg.Container.StopSystem {
 		return target.Partial, nil
 	}
 	return state, nil
@@ -312,7 +250,7 @@ func (t *Target) StopSystem() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("can't read the container system for %s: %w", t.cfg.Name, err)
 	}
-	if !snap.systemUp {
+	if !snap.SystemUp {
 		return false, nil
 	}
 	if others := t.otherRunning(snap); len(others) > 0 {
@@ -326,17 +264,6 @@ func (t *Target) StopSystem() (bool, error) {
 	return true, nil
 }
 
-func (t *Target) otherRunning(snap snapshot) []string {
-	mine := map[string]bool{}
-	for _, id := range t.cfg.Container.Containers {
-		mine[id] = true
-	}
-	var others []string
-	for id := range snap.running {
-		if !mine[id] {
-			others = append(others, id)
-		}
-	}
-	sort.Strings(others)
-	return others
+func (t *Target) otherRunning(snap containerstate.Snapshot) []string {
+	return containerstate.OtherRunning(snap, t.cfg.Container.Containers)
 }

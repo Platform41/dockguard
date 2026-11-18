@@ -27,10 +27,11 @@ const defaultMinimumFreeSpaceGB = 50
 
 // Kinds.
 const (
-	KindDockerDesktop = "docker-desktop"
-	KindApp           = "app"
-	KindPostgres      = "postgres"
-	KindContainer     = "container"
+	KindDockerDesktop   = "docker-desktop"
+	KindApp             = "app"
+	KindPostgres        = "postgres"
+	KindContainer       = "container"
+	KindContainerSystem = "container-system"
 )
 
 // plannedKinds are in the spec but not built yet.
@@ -65,6 +66,13 @@ type Target struct {
 	App                  *App
 	Postgres             *Postgres
 	Container            *Container
+	ContainerSystem      *ContainerSystem
+	DependsOn            []string
+}
+
+// ContainerSystem manages the shared Apple container service itself.
+type ContainerSystem struct {
+	DataPath string
 }
 
 // DockerDesktop holds the keys of a docker-desktop target.
@@ -291,6 +299,9 @@ func parseCurrent(doc *yaml.Node) (Config, error) {
 		cfg.Targets = append(cfg.Targets, target)
 	}
 
+	if err := validateDependencies(cfg); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
 }
 
@@ -304,10 +315,11 @@ type dockerDesktopKeys struct {
 }
 
 var allowedKeys = map[string][]string{
-	KindDockerDesktop: {"kind", "storage_path", "settings_path", "require_cli_start_support", "fail_if_already_running", "minimum_free_space_gb"},
-	KindApp:           {"kind", "app", "process", "symlink_paths", "fail_if_already_running"},
-	KindPostgres:      {"kind", "data_dir", "bin_dir", "port", "socket_dir", "log_file", "fail_if_already_running"},
-	KindContainer:     {"kind", "up", "down", "containers", "data_path", "stop_system", "fail_if_already_running", "ready", "ready_timeout_seconds", "ephemeral", "volumes"},
+	KindDockerDesktop:   {"kind", "storage_path", "settings_path", "require_cli_start_support", "fail_if_already_running", "minimum_free_space_gb"},
+	KindApp:             {"kind", "app", "process", "symlink_paths", "fail_if_already_running"},
+	KindPostgres:        {"kind", "data_dir", "bin_dir", "port", "socket_dir", "log_file", "fail_if_already_running"},
+	KindContainer:       {"kind", "up", "down", "containers", "data_path", "stop_system", "fail_if_already_running", "ready", "ready_timeout_seconds", "ephemeral", "volumes"},
+	KindContainerSystem: {"kind", "data_path", "fail_if_already_running"},
 }
 
 func parseTarget(name string, node *yaml.Node, defaultFreeGB int) (Target, error) {
@@ -335,20 +347,29 @@ func parseTarget(name string, node *yaml.Node, defaultFreeGB int) (Target, error
 	if !known {
 		return Target{}, fmt.Errorf("unknown kind %q", kind)
 	}
-	if err := checkKeys(keys, allowed); err != nil {
+	if err := checkKeys(keys, append(append([]string{}, allowed...), "depends_on")); err != nil {
 		return Target{}, err
 	}
 
+	deps, err := parseDependencies(node)
+	if err != nil {
+		return Target{}, err
+	}
+	var parsed Target
 	switch kind {
 	case KindApp:
-		return parseApp(name, node)
+		parsed, err = parseApp(name, node)
 	case KindPostgres:
-		return parsePostgres(name, node, defaultFreeGB)
+		parsed, err = parsePostgres(name, node, defaultFreeGB)
 	case KindContainer:
-		return parseContainer(name, node)
+		parsed, err = parseContainer(name, node)
+	case KindContainerSystem:
+		parsed, err = parseContainerSystem(name, node)
 	default:
-		return parseDockerDesktop(name, node, defaultFreeGB)
+		parsed, err = parseDockerDesktop(name, node, defaultFreeGB)
 	}
+	parsed.DependsOn = deps
+	return parsed, err
 }
 
 func checkKeys(keys map[string]int, allowed []string) error {

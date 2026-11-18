@@ -15,6 +15,7 @@ import (
 	"github.com/platform41/dockguard/internal/target"
 	appkind "github.com/platform41/dockguard/internal/target/app"
 	containerkind "github.com/platform41/dockguard/internal/target/container"
+	"github.com/platform41/dockguard/internal/target/containersystem"
 	"github.com/platform41/dockguard/internal/target/dockerdesktop"
 	"github.com/platform41/dockguard/internal/target/postgres"
 )
@@ -111,7 +112,7 @@ func Run(args []string) (int, error) {
 	case "check":
 		return runCheck(cfg, selected)
 	case "start":
-		return runStart(cfg, selected)
+		return runStart(cfg, entries, selected)
 	default:
 		return runStop(cfg, entries, selected, opts.Eject)
 	}
@@ -167,6 +168,12 @@ func parseArgs(args []string) (options, error) {
 
 func defaultBuildTargets(cfg config.Config) ([]entry, error) {
 	entries := make([]entry, 0, len(cfg.Targets))
+	var managed []string
+	for _, t := range cfg.Targets {
+		if t.Container != nil {
+			managed = append(managed, t.Container.Containers...)
+		}
+	}
 	for _, t := range cfg.Targets {
 		switch t.Kind {
 		case config.KindDockerDesktop:
@@ -181,6 +188,8 @@ func defaultBuildTargets(cfg config.Config) ([]entry, error) {
 			containerTarget.OnDiscard = func(string) { output.PrintEphemeralDiscard(display(e)) }
 			e.t = containerTarget
 			entries = append(entries, e)
+		case config.KindContainerSystem:
+			entries = append(entries, entry{t: containersystem.New(t, cfg.Drive, managed), cfg: t})
 		default:
 			return nil, fmt.Errorf("target %q: kind %q is not supported", t.Name, t.Kind)
 		}
@@ -344,7 +353,7 @@ type readinessStarter interface {
 
 var _ readinessStarter = (*containerkind.Target)(nil)
 
-func runStart(cfg config.Config, e entry) (int, error) {
+func startTarget(cfg config.Config, e entry) (int, error) {
 	items := preflight(cfg, e, true)
 	output.PrintItems(items)
 	if !checks.AllOK(items) {
@@ -373,7 +382,7 @@ func runStart(cfg config.Config, e entry) (int, error) {
 	return 0, nil
 }
 
-func runStop(cfg config.Config, entries []entry, e entry, eject bool) (int, error) {
+func stopTarget(cfg config.Config, entries []entry, e entry, eject bool) (int, error) {
 	stopRequested, err := e.t.Stop()
 	if err != nil {
 		return 1, err
