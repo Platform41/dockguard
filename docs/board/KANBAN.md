@@ -46,6 +46,17 @@
 
 ### This Week
 
+- [ ] `[v0.8.0] Target dependencies (depends_on) and the container-system target`
+  **Owner:** Three
+  **Priority:** P2
+  **Status:** Approved by Azrad, 2026-11-18 (D-024); ready for implementation
+  **Outcome:** Targets declare `depends_on`; the Apple container system becomes its own
+  `container-system` target. One command acts on one target; DockGuard asks `[y/N]` (default No)
+  before also starting a stopped dependency or stopping running dependents, and refuses with the
+  command when not in a terminal. `stop --all` follows dependency order, replacing the two-pass rule;
+  `stop_system` (D-017) deprecated for one release.
+  **Proposal:** `docs/specs/target-dependencies.md` (AS-105 to AS-122)
+
 ### Doing
 
 _None._
@@ -413,6 +424,7 @@ _None._
 | D-021 | 2026-11-15 | The drive may be registered by volume UUID (`drive_uuid`); with it set, the drive counts as mounted only when that volume is mounted at `drive` (statuses: mounted, not mounted, not connected via a successful `diskutil list`, mounted elsewhere, wrong volume, stray folder, unknown; fail closed). Preflight checks it and eject refuses otherwise. Read-only `dockguard drive` prints the line to paste; `dockguard mount` mounts by UUID within 90 s and verifies the path; dashboard `m` only when attached but unmounted. No auto-mount change, no `sudo`, config stays user-owned | Azrad | `DriveMounted` only checked that the path was a directory; the T7 was remounted by hand after the v0.6.0 live check. Cross-reviewed by Codex. Spec: `docs/specs/drive-identity.md` |
 | D-022 | 2026-11-15 | Container targets may list named volumes (`volumes`, requires `data_path`). Volumes are information only, shown as `list` sub-rows and `status` lines with present/missing/unknown and allocated size from `stat` of `<data_path>/volumes/<name>/volume.img`; never a separate lifecycle target, no `container` CLI calls, no state, check, stop, eject or dashboard change | Azrad | Requested because the Fizzy MySQL volume was invisible in `list`; a duplicate DB target was rejected because its state and stop would overlap the stack. Spec: `docs/specs/container-volumes.md` |
 | D-023 | 2026-11-15 | `dockguard version` prints the build's version from build info and checks the latest release with `go list -m …@latest` (only in `version`, in a fresh temp dir with `GOWORK=off`); in a terminal it offers `[y/N]` and runs a pinned `go install`, reporting `Updated` only when the installed file's build info shows the pinned version. Verification follows the user's Go module policy. No other network use, no automatic updates | Azrad | Requested to ship with D-021 in v0.7.0; `go install` is the only distribution channel. Cross-reviewed by Codex. Spec: `docs/specs/version-and-update.md` |
+| D-024 | 2026-11-18 | Amends D-017: targets may declare `depends_on`; the Apple container system becomes its own `container-system` target. One command acts on one target; when a dependency is in the way DockGuard asks `[y/N]` (default No) to start missing dependencies or stop running dependents, and refuses with the command when not in a terminal or when a dependency's state is unknown. `stop --all` follows reverse dependency order, replacing the two-pass rule. `stop_system` is deprecated for one release; configs mixing it with a `container-system` target are rejected | Azrad | Starting one container stack silently started the shared system, and stopping one could stop it for all. Spec: `docs/specs/target-dependencies.md` |
 
 ---
 
