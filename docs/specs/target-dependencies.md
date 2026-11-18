@@ -1,6 +1,6 @@
 # Proposal — Target dependencies (`depends_on`) and the container-system target
 
-**Status:** Approved by Azrad, 2026-11-18
+**Status:** Approved by Azrad, 2026-11-18; released in v0.8.0 (2026-11-19)
 **Target:** v0.8.0
 **Owner:** One
 **Builder:** Three
