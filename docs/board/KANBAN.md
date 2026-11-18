@@ -48,21 +48,6 @@
 
 ### Doing
 
-- [ ] `[v0.8.0] Target dependencies (depends_on) and the container-system target`
-  **Owner:** Three
-  **Priority:** P2
-  **Status:** Slice 1 merged as `8fde420`; Slice 2 implemented and awaiting review.
-  **Slice 2 validation:** 492 tests and race suite pass; vet/format clean. Includes ordered stops,
-  dashboard confirmations, deprecation/migration docs and the singular stop-message fix.
-  **Slice 2 review:** [PR #35](https://github.com/Platform41/dockguard/pull/35), review only.
-  **Review:** [Slice 1 PR #34](https://github.com/Platform41/dockguard/pull/34); 454 tests and race suite pass, vet/format clean.
-  **Outcome:** Targets declare `depends_on`; the Apple container system becomes its own
-  `container-system` target. One command acts on one target; DockGuard asks `[y/N]` (default No)
-  before also starting a stopped dependency or stopping running dependents, and refuses with the
-  command when not in a terminal. `stop --all` follows dependency order, replacing the two-pass rule;
-  `stop_system` (D-017) deprecated for one release.
-  **Proposal:** `docs/specs/target-dependencies.md` (AS-105 to AS-122)
-
 ### Review/Test
 
 ### Blocked
@@ -75,6 +60,25 @@
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.8.0] Release: target dependencies and the container-system target`
+  **Owner:** One
+  **Priority:** P2
+  **Completed:** 2026-11-19
+  **Branch:** `chore/release-v0.8.0`
+  **Deliverable:** `docs/releases/v0.8.0.md`, tag `v0.8.0`
+  **Notes:** Release review reran the full Go suite (492 tests), race suite, `go vet` and `gofmt` on
+  merged master `491961b`. Maintainer live check passed on a migrated real config: start/stop
+  prompts (No, no terminal, yes), dashboard confirmation, `stop --all --eject` in dependency order.
+
+- [x] `[v0.8.0] Target dependencies (depends_on) and the container-system target`
+  **Owner:** Three
+  **Priority:** P2
+  **Completed:** 2026-11-19
+  **Delivered:** Slice 1 PR #34 (`8fde420`): config, `container-system` kind, CLI prompts. Slice 2
+  PR #35 (`491961b`): dependency-ordered `stop --all`, dashboard prompts, `stop_system`
+  deprecation, README migration guide, singular stop-message fix.
+  **Spec:** `docs/specs/target-dependencies.md` (D-024; AS-105 to AS-122)
 
 - [x] `[v0.7.0] Release: drive identity, dockguard version, container volumes`
   **Owner:** One

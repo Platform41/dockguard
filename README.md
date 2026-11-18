@@ -78,7 +78,7 @@ Build a local binary:
 go build -o ./bin/dockguard ./cmd/dockguard
 ```
 
-## Upgrading to v0.8.0 (when released)
+## Upgrading to v0.8.0
 
 v0.8.0 makes shared prerequisites explicit with `depends_on` and the new
 `container-system` kind. Start and stop ask before acting on additional targets;
@@ -89,8 +89,8 @@ Existing configs keep working for this release. If you use `stop_system`, `list`
 and `status` show a deprecation line for each target using it. Follow
 [Migrating from `stop_system`](#migrating-from-stop_system) before its removal in
 the release after v0.8.0. This changes your config and scripts; updating the binary
-alone does not migrate them. Once v0.8.0 is released, update with `dockguard version`
-or the `go install` command above.
+alone does not migrate them. Update with `dockguard version` or the `go install`
+command above.
 
 ## Upgrading to v0.7.0
 

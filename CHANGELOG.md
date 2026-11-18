@@ -2,6 +2,20 @@
 
 All notable changes to DockGuard are documented in this file.
 
+## [v0.8.0] - 2026-11-19
+
+### Added
+- `depends_on` on every target kind, validated for unknown names, self references, duplicates and cycles (shown in order) (D-024).
+- `container-system` kind for Apple's shared container service: confirmed start, stop that refuses while unmanaged containers run, and eject blocking while running or unknown (D-024).
+- `start` and `stop` ask `[y/N]` (default No) before also starting missing prerequisites (deepest first, each confirmed running) or stopping running dependents (reverse dependency order, each confirmed). Without a terminal they refuse and print the commands to run; an unknown prerequisite is refused, never offered (D-024).
+- Dashboard dependency column; `s` and `x` ask the same questions and recheck the plan before acting (D-024).
+
+### Changed
+- `stop --all [--eject]` stops targets in reverse dependency order, keeping reverse config order for independent targets; a target that fails to stop keeps its prerequisites running. Configs without dependencies keep the previous order (D-024).
+
+### Deprecated
+- `stop_system` (D-017): still works without a `container-system` target, with a deprecation line in `list` and `status`; rejected together with a `container-system` target; removed in the next release.
+
 ## [v0.7.0] - 2026-11-16
 
 ### Added
@@ -104,6 +118,7 @@ All notable changes to DockGuard are documented in this file.
 ### Fixed
 - Fixed Docker Desktop settings path matching to support case-insensitive keys such as `DataFolder`.
 
+[v0.8.0]: https://github.com/platform41/dockguard/compare/v0.7.0...v0.8.0
 [v0.7.0]: https://github.com/platform41/dockguard/compare/v0.6.0...v0.7.0
 [v0.6.0]: https://github.com/platform41/dockguard/compare/v0.5.1...v0.6.0
 [v0.5.1]: https://github.com/platform41/dockguard/compare/v0.5.0...v0.5.1
