@@ -52,6 +52,7 @@
   **Owner:** Three
   **Priority:** P2
   **Status:** Slice 1 implemented; awaiting review: config, container-system target, CLI prompts.
+  **Review:** [Slice 1 PR #34](https://github.com/Platform41/dockguard/pull/34); 454 tests and race suite pass, vet/format clean.
   Slice 2 (stop-all ordering, dashboard, migration docs) follows after Slice 1 review and merge.
   **Outcome:** Targets declare `depends_on`; the Apple container system becomes its own
   `container-system` target. One command acts on one target; DockGuard asks `[y/N]` (default No)
