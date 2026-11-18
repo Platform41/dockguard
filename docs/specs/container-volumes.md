@@ -70,7 +70,7 @@ After a target's row, one sub-row per volume, in config order, in the same table
 NAME             KIND       STATE              PATH
 fizzy            container  running            /Volumes/ExternalSSD/container-data
   └ fizzy-mysql  volume     present, 281 MB    /Volumes/ExternalSSD/container-data/volumes/fizzy-mysql
-warisan-db       postgres   stopped            /Volumes/ExternalSSD/Projects/pgdata/warisan
+myapp-db         postgres   stopped            /Volumes/ExternalSSD/pgdata/myapp
 ```
 
 - PATH is the volume's folder, `<data_path>/volumes/<name>`.
