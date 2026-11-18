@@ -12,8 +12,9 @@
 One DockGuard command should act on one target. Today, shared prerequisites are hidden inside
 scripts and special options:
 
-- Every Apple `container` stack's `up` script runs `container system start` itself (Fizzy, AWS
-  Emulator, Warisan S3), so starting one stack quietly starts the shared container system.
+- Every Apple `container` stack's `up` script runs `container system start` itself (for example
+  Fizzy and the AWS Emulator recipe), so starting one stack quietly starts the shared container
+  system.
 - `stop_system: true` (D-017) makes stopping one stack also stop the whole container system, and
   `stop --all` needs a special two-pass rule (stacks first, then shared systems).
 
@@ -119,7 +120,8 @@ container stop requested.
 
 ### 3.5 Dashboard
 
-- Each row shows its dependencies dimmed after the kind, e.g. `container  → container`.
+- Each row shows its dependencies dimmed after the kind, e.g. the `fizzy` row shows
+  `container  → container` (kind `container`, depends on the `container` target).
 - `s` on a target with a dependency that isn't running opens a confirmation with the §3.2 question.
   `x` on a target with running dependents opens one with the §3.3 question. Both use the existing
   confirmation mechanism; a "no" changes nothing.
@@ -191,7 +193,7 @@ Test-first with fakes (no real containers or drives): config validation; graph o
 chains and independent targets; prompt answers through an injected reader and TTY check; failure
 mid-sequence; `stop --all` ordering and failure propagation; legacy `stop_system` regression; the
 dashboard confirmations. Live check (maintainer): migrate the real config (`container` target,
-`depends_on` on fizzy, aws-emulator and warisan-s3; `container system start` removed from their
+`depends_on` on each container stack; `container system start` removed from their
 scripts), then `start fizzy` with the system stopped (answer y), `stop container` with stacks running
 (answer y), and `stop --all --eject`.
 

@@ -44,6 +44,17 @@
 
 ### Backlog
 
+- [ ] `[v0.8.0] Target dependencies (depends_on) and the container-system target`
+  **Owner:** Three
+  **Priority:** P2
+  **Status:** Proposed; sponsor decision pending
+  **Outcome:** Targets declare `depends_on`; the Apple container system becomes its own
+  `container-system` target. One command acts on one target; DockGuard asks `[y/N]` (default No)
+  before also starting a stopped dependency or stopping running dependents, and refuses with the
+  command when not in a terminal. `stop --all` follows dependency order, replacing the two-pass rule;
+  `stop_system` (D-017) deprecated for one release.
+  **Proposal:** `docs/specs/target-dependencies.md` (AS-105 to AS-122)
+
 ### This Week
 
 ### Doing
