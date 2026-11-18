@@ -54,6 +54,7 @@
   **Status:** Slice 1 merged as `8fde420`; Slice 2 implemented and awaiting review.
   **Slice 2 validation:** 492 tests and race suite pass; vet/format clean. Includes ordered stops,
   dashboard confirmations, deprecation/migration docs and the singular stop-message fix.
+  **Slice 2 review:** [PR #35](https://github.com/Platform41/dockguard/pull/35), review only.
   **Review:** [Slice 1 PR #34](https://github.com/Platform41/dockguard/pull/34); 454 tests and race suite pass, vet/format clean.
   **Outcome:** Targets declare `depends_on`; the Apple container system becomes its own
   `container-system` target. One command acts on one target; DockGuard asks `[y/N]` (default No)
