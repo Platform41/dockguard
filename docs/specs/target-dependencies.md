@@ -87,6 +87,17 @@ fizzy start requested.
   there, starts nothing further, and exits 1. Dependencies already running are left alone.
 - **Chains** are one question listing the order: `Start docker, then container, first? [y/N]`.
 - **Not a terminal:** no prompt; the same refusal message, exit 1.
+- **Chain refusal (clarified 2026-11-19):** list only dependencies that are not running,
+  deepest first. One missing dependency keeps the exact message above. For two or more:
+
+  ```text
+  Not started. Start these first, in order:
+    dockguard start docker
+    dockguard start container
+  ```
+
+  Each command is on its own line, ready to copy and paste. The chain question remains
+  `Start docker, then container, first? [y/N]`.
 - **Unknown dependency state:** never offered. It refuses, showing the probe error, because DockGuard
   can't confirm what it would be starting over.
 

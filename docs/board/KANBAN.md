@@ -2,7 +2,7 @@
 
 **Status:** Active
 **Repository:** `dockguard`
-**Last Updated:** 2026-11-16
+**Last Updated:** 2026-11-19
 **Board Owner:** One
 
 ---
@@ -46,20 +46,20 @@
 
 ### This Week
 
+### Doing
+
 - [ ] `[v0.8.0] Target dependencies (depends_on) and the container-system target`
   **Owner:** Three
   **Priority:** P2
-  **Status:** Approved by Azrad, 2026-11-18 (D-024); ready for implementation
+  **Status:** Slice 1 implemented; awaiting review: config, container-system target, CLI prompts.
+  **Review:** [Slice 1 PR #34](https://github.com/Platform41/dockguard/pull/34); 454 tests and race suite pass, vet/format clean.
+  Slice 2 (stop-all ordering, dashboard, migration docs) follows after Slice 1 review and merge.
   **Outcome:** Targets declare `depends_on`; the Apple container system becomes its own
   `container-system` target. One command acts on one target; DockGuard asks `[y/N]` (default No)
   before also starting a stopped dependency or stopping running dependents, and refuses with the
   command when not in a terminal. `stop --all` follows dependency order, replacing the two-pass rule;
   `stop_system` (D-017) deprecated for one release.
   **Proposal:** `docs/specs/target-dependencies.md` (AS-105 to AS-122)
-
-### Doing
-
-_None._
 
 ### Review/Test
 

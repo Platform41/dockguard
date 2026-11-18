@@ -160,9 +160,9 @@ func (c *controller) Run(action ui.Action, name string) (bool, string) {
 		}
 		switch action {
 		case ui.Start:
-			code, err = runStart(c.cfg, e)
+			code, err = startWithDependencies(c.cfg, c.entries, e, declineDependency)
 		case ui.Stop:
-			code, err = runStop(c.cfg, c.entries, e, false)
+			code, err = stopWithDependencies(c.cfg, c.entries, e, false, declineDependency)
 		case ui.Check:
 			code, err = runCheck(c.cfg, e)
 		}

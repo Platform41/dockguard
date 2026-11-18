@@ -1,0 +1,47 @@
+task: target dependencies, slice 1
+date: 2026-11-19
+decision: D-024
+approved_spec: docs/specs/target-dependencies.md
+base: 831ab69
+branch: feat/target-dependencies
+risk: medium
+risk_reasons:
+  - Start and stop can affect prerequisite targets and the shared container service.
+  - Unknown state and incomplete confirmation must fail closed.
+scope:
+  - depends_on on every kind; unknown, self, duplicate, and ordered-cycle validation.
+  - Explicit container-system target and conflict with stop_system true.
+  - Shared system snapshot and unmanaged-container safety logic reused by both kinds.
+  - CLI default-No dependency prompts, ordered actions, and state confirmation.
+  - Single-target stop --eject retains the existing eject gate.
+  - Chain-refusal clarification recorded in spec section 3.2.
+deferred:
+  - Dependency-ordered stop --all, dashboard confirmations, deprecation notices, migration docs.
+  - Until dashboard confirmations land, dependency-blocked dashboard actions refuse without reading TUI input.
+scenario_tests:
+  AS-105: TestDependencyValidation, TestDependenciesAllowedOnEveryKind
+  AS-106: TestSystemStates, TestStartConfirmsRunning, TestSystemStopUnmanagedSafety, TestStopAlreadyStoppedOrUnknown, TestSystemCommandFailures, TestSystemChecks, TestBuildContainerSystemTarget, TestContainerSystemRunningBlocksEject
+  AS-107: TestStartSkipsRunningDependencies
+  AS-108: TestStartDependencyAnswers
+  AS-109: TestStartDependencyAnswers
+  AS-110: TestStartDependencyAnswers, TestStartDependencyChain, TestChainRefusalOmitsRunningDependencies
+  AS-111: TestStartDependencyChain, TestDiamondStartsSharedDependencyOnlyOnce, TestDependencyGraphOrdersChainsAndIndependentTargets
+  AS-112: TestStartDependencyFailures, TestDependencySequencesStopAtMiddleFailure
+  AS-113: TestUnknownDependencyProbeErrorIsReturnedWithoutPrompt
+  AS-114: TestStopDependencyAnswers, TestStopSkipsStoppedAndIndependentTargets, TestStopDependenciesThenEject
+  AS-115: TestStopDependencyAnswers
+  AS-116: TestStopDependencyFailurePreventsTargetAndEject, TestDependencySequencesStopAtMiddleFailure
+  AS-120: TestContainerSystemConflictsWithStopSystem
+  AS-122: TestNoDependenciesPreservesSingleTargetStopOutput and the existing command/container regression suite
+validation:
+  test_first: New config, target, and CLI tests failed before their implementations.
+  go_test: 454 passed in 18 packages
+  go_test_race: 454 passed in 18 packages
+  go_vet: pass
+  gofmt: clean
+  diff_check: pass
+  terminal_smoke: Built CLI with fake container executable; Enter refuses, exact command, exit 1.
+  non_terminal_smoke: Built CLI with fake container executable; no prompt, exact command, exit 1.
+  live_system_changes: None; no real eject, stack stop, or user-config modification.
+review_status: pending
+release_status: No merge, tag, or release.
