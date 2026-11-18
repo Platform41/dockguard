@@ -22,12 +22,13 @@ var (
 
 // dependencyGraph keeps configuration order for independent targets and visits prerequisites first.
 type dependencyGraph struct {
-	order  []entry
-	byName map[string]entry
+	order      []entry
+	configured []entry
+	byName     map[string]entry
 }
 
 func newDependencyGraph(entries []entry) (dependencyGraph, error) {
-	g := dependencyGraph{byName: map[string]entry{}}
+	g := dependencyGraph{byName: map[string]entry{}, configured: append([]entry{}, entries...)}
 	for _, e := range entries {
 		g.byName[e.t.Name()] = e
 	}
@@ -92,55 +93,76 @@ func askDependency(question string) bool {
 	answer = strings.ToLower(strings.TrimSpace(answer))
 	return answer == "y" || answer == "yes"
 }
-func declineDependency(string) bool { return false }
 
-func runStart(cfg config.Config, entries []entry, e entry) (int, error) {
-	return startWithDependencies(cfg, entries, e, askDependency)
+// dependencyPlan is read-only until its caller explicitly confirms it.
+type dependencyPlan struct {
+	items            []entry
+	names            []string
+	question, detail string
 }
 
-func startWithDependencies(cfg config.Config, entries []entry, e entry, confirm func(string) bool) (int, error) {
+func planStart(entries []entry, e entry) (dependencyPlan, error) {
+	p := dependencyPlan{}
 	if len(e.cfg.DependsOn) == 0 {
-		return startTarget(cfg, e)
+		return p, nil
 	}
 	g, err := newDependencyGraph(entries)
 	if err != nil {
-		return 1, err
+		return p, err
 	}
 	needed := g.needs(e.t.Name())
-	var missing []entry
+	var notices []string
 	for _, dep := range g.order {
 		if !needed[dep.t.Name()] {
 			continue
 		}
 		state, err := dep.t.State()
 		if state == target.Unknown {
-			return 1, fmt.Errorf("not starting %s: dependency %s state unknown: %s", e.t.Name(), dep.t.Name(), errMessage(err))
+			return p, fmt.Errorf("not starting %s: dependency %s state unknown: %s", e.t.Name(), dep.t.Name(), errMessage(err))
 		}
 		if state != target.Running {
-			missing = append(missing, dep)
-			fmt.Fprintf(output.Out, "%s needs %s, which is %s.\n", e.t.Name(), dep.t.Name(), state)
+			p.items = append(p.items, dep)
+			notices = append(notices, fmt.Sprintf("%s needs %s, which is %s.", e.t.Name(), dep.t.Name(), state))
 		}
 	}
-	if len(missing) == 0 {
+	p.names = entryNames(p.items)
+	p.detail = strings.Join(notices, "\n")
+	if len(p.names) == 1 {
+		p.question = "Start " + p.names[0] + " first?"
+	}
+	if len(p.names) > 1 {
+		p.question = "Start " + strings.Join(p.names, ", then ") + ", first?"
+	}
+	return p, nil
+}
+
+func runStart(cfg config.Config, entries []entry, e entry) (int, error) {
+	return startWithDependencies(cfg, entries, e, confirmDependency)
+}
+
+func confirmDependency(p dependencyPlan) bool { return askDependency(p.question) }
+
+func startWithDependencies(cfg config.Config, entries []entry, e entry, confirm func(dependencyPlan) bool) (int, error) {
+	p, err := planStart(entries, e)
+	if err != nil {
+		return 1, err
+	}
+	if len(p.items) == 0 {
 		return startTarget(cfg, e)
 	}
-	names := entryNames(missing)
-	question := "Start " + names[0] + " first?"
-	if len(names) > 1 {
-		question = "Start " + strings.Join(names, ", then ") + ", first?"
-	}
-	if !confirm(question) {
-		if len(names) == 1 {
-			fmt.Fprintf(output.Out, "Not started. Start it first: dockguard start %s\n", names[0])
+	fmt.Fprintln(output.Out, p.detail)
+	if !confirm(p) {
+		if len(p.names) == 1 {
+			fmt.Fprintf(output.Out, "Not started. Start it first: dockguard start %s\n", p.names[0])
 		} else {
 			fmt.Fprintln(output.Out, "Not started. Start these first, in order:")
-			for _, name := range names {
+			for _, name := range p.names {
 				fmt.Fprintf(output.Out, "  dockguard start %s\n", name)
 			}
 		}
 		return 1, nil
 	}
-	for _, dep := range missing {
+	for _, dep := range p.items {
 		state, err := dep.t.State()
 		if state == target.Running {
 			continue
@@ -172,46 +194,60 @@ func waitForRunning(e entry) (target.State, error) {
 	return state, err
 }
 
-func runStop(cfg config.Config, entries []entry, e entry, eject bool) (int, error) {
-	return stopWithDependencies(cfg, entries, e, eject, askDependency)
-}
-
-func stopWithDependencies(cfg config.Config, entries []entry, e entry, eject bool, confirm func(string) bool) (int, error) {
+func planStop(entries []entry, e entry) (dependencyPlan, error) {
+	p := dependencyPlan{}
 	hasDeps := false
 	for _, other := range entries {
 		hasDeps = hasDeps || len(other.cfg.DependsOn) > 0
 	}
 	if !hasDeps {
-		return stopTarget(cfg, entries, e, eject)
+		return p, nil
 	}
 	g, err := newDependencyGraph(entries)
 	if err != nil {
-		return 1, err
+		return p, err
 	}
 	active := map[string]bool{}
-	var names []string
 	for _, other := range entries {
 		if g.needs(other.t.Name())[e.t.Name()] {
 			state, _ := other.t.State()
 			if state != target.Stopped {
 				active[other.t.Name()] = true
-				names = append(names, other.t.Name())
+				p.names = append(p.names, other.t.Name())
 			}
 		}
 	}
-	if len(names) == 0 {
+	if len(p.names) == 0 {
+		return p, nil
+	}
+	for _, dep := range g.stopOrder() {
+		if active[dep.t.Name()] {
+			p.items = append(p.items, dep)
+		}
+	}
+	p.question = "Stop them first?"
+	p.detail = dependentNotice(p.names, e.t.Name())
+	return p, nil
+}
+
+func runStop(cfg config.Config, entries []entry, e entry, eject bool) (int, error) {
+	return stopWithDependencies(cfg, entries, e, eject, confirmDependency)
+}
+
+func stopWithDependencies(cfg config.Config, entries []entry, e entry, eject bool, confirm func(dependencyPlan) bool) (int, error) {
+	p, err := planStop(entries, e)
+	if err != nil {
+		return 1, err
+	}
+	if len(p.items) == 0 {
 		return stopTarget(cfg, entries, e, eject)
 	}
-	fmt.Fprintf(output.Out, "%s depend on %s and are running.\n", strings.Join(names, " and "), e.t.Name())
-	if !confirm("Stop them first?") {
-		fmt.Fprintf(output.Out, "Not stopped. Stop these first: %s\n", strings.Join(names, ", "))
+	fmt.Fprintln(output.Out, p.detail)
+	if !confirm(p) {
+		fmt.Fprintf(output.Out, "Not stopped. Stop these first: %s\n", strings.Join(p.names, ", "))
 		return 1, nil
 	}
-	for i := len(g.order) - 1; i >= 0; i-- {
-		dep := g.order[i]
-		if !active[dep.t.Name()] {
-			continue
-		}
+	for _, dep := range p.items {
 		if code, err := stopTarget(cfg, entries, dep, false); code != 0 || err != nil {
 			return code, err
 		}
@@ -233,4 +269,17 @@ func entryNames(entries []entry) []string {
 		names = append(names, e.t.Name())
 	}
 	return names
+}
+
+func dependentNotice(names []string, name string) string {
+	if len(names) == 1 {
+		return fmt.Sprintf("%s depends on %s and is running.", names[0], name)
+	}
+	return fmt.Sprintf("%s depend on %s and are running.", strings.Join(names, " and "), name)
+}
+
+func printStopSystemDeprecation(e entry) {
+	if e.cfg.Container != nil && e.cfg.Container.StopSystem {
+		fmt.Fprintf(output.Out, "%s: stop_system is deprecated; add a container-system target and depends_on (see README).\n", e.t.Name())
+	}
 }

@@ -294,6 +294,9 @@ func runList(cfg config.Config, entries []entry) (int, error) {
 		}
 	}
 	output.PrintList(rows)
+	for _, e := range entries {
+		printStopSystemDeprecation(e)
+	}
 	return 0, nil
 }
 
@@ -318,6 +321,7 @@ func runStatus(cfg config.Config, entries []entry) (int, error) {
 			}
 		}
 		output.PrintTargetHeading(e.t.Name(), e.t.Kind(), state)
+		printStopSystemDeprecation(e)
 
 		items := preflightWithDrive(cfg, e, false, ds)
 		output.PrintItems(items)
@@ -414,10 +418,9 @@ type sharedSystemStopper interface {
 // Container stacks must take the two-pass path; this fails to compile if they stop doing so.
 var _ sharedSystemStopper = (*containerkind.Target)(nil)
 
-// runStopAll stops every target that isn't confirmed stopped (running, partial or unknown), in
-// reverse config order, and keeps going when one fails. Shared system services are stopped in a
-// second pass, after every target. Any failure means no eject (spec §2).
-func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
+// runStopAllLegacy preserves v0.7 behavior for configs without dependencies or an explicit
+// container-system target: reverse config order, then the shared-system pass.
+func runStopAllLegacy(cfg config.Config, entries []entry, eject bool) (int, error) {
 	justStopped := map[string]bool{}
 	var failed []string
 
@@ -446,6 +449,11 @@ func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
 
 	// Second pass: every managed stack is down now, so only unmanaged containers can still stop a
 	// shared system from shutting down. A stack that failed above is skipped.
+	failed = stopLegacySystems(entries, justStopped, failed)
+	return finishStopAll(cfg, entries, eject, justStopped, failed)
+}
+
+func stopLegacySystems(entries []entry, justStopped map[string]bool, failed []string) []string {
 	failedSet := map[string]bool{}
 	for _, name := range failed {
 		failedSet[name] = true
@@ -467,6 +475,10 @@ func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
 		}
 	}
 
+	return failed
+}
+
+func finishStopAll(cfg config.Config, entries []entry, eject bool, justStopped map[string]bool, failed []string) (int, error) {
 	if len(failed) > 0 {
 		if eject {
 			output.PrintNotEjecting(cfg.Drive, "these targets failed to stop: "+strings.Join(failed, ", "))

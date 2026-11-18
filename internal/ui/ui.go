@@ -23,6 +23,7 @@ type Row struct {
 	Name, Kind, Path string
 	State            target.State
 	Ephemeral        bool
+	DependsOn        []string
 	// Err explains an unknown state.
 	Err string
 }
@@ -83,6 +84,20 @@ type Controller interface {
 	Run(action Action, target string) (ok bool, output string)
 }
 
+// Confirmation names exactly the additional targets the user is being asked to affect.
+type Confirmation struct {
+	Action           Action
+	Target           string
+	Question, Detail string
+	Targets          []string
+}
+
+// DependencyController plans without mutation and rechecks consent before executing.
+type DependencyController interface {
+	Plan(Action, string) (Confirmation, error)
+	RunConfirmed(Action, string, Confirmation) (bool, string)
+}
+
 // Blockers lists the targets that stop the drive from being ejected (spec §2.3): every target
 // that isn't confirmed stopped.
 func Blockers(s Snapshot) []string {
@@ -108,6 +123,11 @@ type (
 		ok     bool
 		output string
 	}
+	planMsg struct {
+		pending      pending
+		confirmation Confirmation
+		err          error
+	}
 )
 
 // Model is the dashboard's state.
@@ -128,8 +148,11 @@ type Model struct {
 }
 
 type pending struct {
-	action Action
-	target string
+	action           Action
+	target           string
+	planning         bool
+	question, detail string
+	approval         *Confirmation
 }
 
 // New returns a dashboard model.
@@ -146,23 +169,48 @@ func tick() tea.Cmd {
 	return tea.Tick(RefreshInterval, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
-func (m Model) run(a Action, name string) tea.Cmd {
+func (m Model) runPending(p pending) tea.Cmd {
 	ctl := m.ctl
 	return func() tea.Msg {
-		ok, out := ctl.Run(a, name)
-		return actionMsg{action: a, target: name, ok: ok, output: out}
+		if p.planning {
+			plan, err := ctl.(DependencyController).Plan(p.action, p.target)
+			return planMsg{pending: p, confirmation: plan, err: err}
+		}
+		var ok bool
+		var out string
+		if p.approval != nil {
+			ok, out = ctl.(DependencyController).RunConfirmed(p.action, p.target, *p.approval)
+		} else {
+			ok, out = ctl.Run(p.action, p.target)
+		}
+		return actionMsg{action: p.action, target: p.target, ok: ok, output: out}
 	}
 }
 
 // dispatch starts an action, or queues it until the probe in flight has finished: probes and
 // actions never overlap, so an older snapshot can't overwrite the result of a newer action.
 func (m Model) dispatch(a Action, name string) (Model, tea.Cmd) {
+	return m.dispatchPending(pending{action: a, target: name})
+}
+
+func (m Model) dispatchPending(p pending) (Model, tea.Cmd) {
 	m.busy = true
 	if m.refreshing {
-		m.queued = &pending{action: a, target: name}
+		m.queued = &p
 		return m, nil
 	}
-	return m, m.run(a, name)
+	return m, m.runPending(p)
+}
+
+func (m Model) prepare(a Action, name string) (Model, tea.Cmd) {
+	if _, ok := m.ctl.(DependencyController); ok {
+		return m.dispatchPending(pending{action: a, target: name, planning: true})
+	}
+	if a == Start {
+		return m.dispatch(a, name)
+	}
+	m.confirming = &pending{action: a, target: name}
+	return m, nil
 }
 
 func (m Model) selectedName() string {
@@ -189,7 +237,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// An action that was waiting for this probe runs now.
 		if q := m.queued; q != nil {
 			m.queued = nil
-			return m, m.run(q.action, q.target)
+			return m, m.runPending(*q)
 		}
 		return m, nil
 
@@ -210,6 +258,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.refreshing = true
 		return m, m.refresh()
+
+	case planMsg:
+		m.busy = false
+		if msg.err != nil {
+			return m.Update(actionMsg{action: msg.pending.action, target: msg.pending.target, output: msg.err.Error()})
+		}
+		if msg.confirmation.Question == "" && msg.pending.action == Start {
+			return m.dispatch(Start, msg.pending.target)
+		}
+		p := msg.pending
+		p.planning = false
+		p.question = msg.confirmation.Question
+		p.detail = msg.confirmation.Detail
+		p.approval = &msg.confirmation
+		m.confirming = &p
+		return m, nil
 
 	case tea.KeyMsg:
 		// A burst of typed or pasted characters arrives as one message ("jj"); handle each
@@ -242,7 +306,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p := m.confirming
 		m.confirming = nil
 		if k == "y" || k == "Y" {
-			return m.dispatch(p.action, p.target)
+			return m.dispatchPending(*p)
 		}
 		m.lastTitle, m.lastOK, m.lastOutput = "cancelled", true, ""
 		return m, nil
@@ -277,7 +341,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "s":
 		if name != "" {
-			return m.dispatch(Start, name)
+			return m.prepare(Start, name)
 		}
 	case "c":
 		if name != "" {
@@ -285,7 +349,7 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "x":
 		if name != "" {
-			m.confirming = &pending{action: Stop, target: name}
+			return m.prepare(Stop, name)
 		}
 	case "E":
 		m.confirming = &pending{action: StopAllEject}
@@ -397,7 +461,7 @@ func (m Model) View() string {
 	// Targets.
 	nameW, kindW, stateW := 4, 4, 7
 	for _, r := range m.snap.Rows {
-		nameW, kindW = max(nameW, len(r.Name)), max(kindW, len(r.Kind))
+		nameW, kindW = max(nameW, len(r.Name)), max(kindW, lipgloss.Width(kindLabel(r)))
 		width := len(r.State.String())
 		if !m.snap.Mounted {
 			width = len("drive not mounted")
@@ -413,7 +477,7 @@ func (m Model) View() string {
 			marker = accent.Render("▌")
 		}
 		// Pad before styling: colour codes would otherwise count towards the column width.
-		prefix := fmt.Sprintf(" %s%%s %-*s  %s  ", marker, nameW, r.Name, dim.Render(fmt.Sprintf("%-*s", kindW, r.Kind)))
+		prefix := fmt.Sprintf(" %s%%s %-*s  %s  ", marker, nameW, r.Name, dim.Render(fmt.Sprintf("%-*s", kindW, kindLabel(r))))
 		stateLabel := stateText(r.State)
 		mark := stateMark(r.State)
 		if !m.snap.Mounted {
@@ -451,7 +515,12 @@ func (m Model) View() string {
 
 	// Footer.
 	b.WriteString("\n")
-	if m.confirming != nil {
+	if m.confirming != nil && m.confirming.question != "" {
+		if m.confirming.detail != "" {
+			b.WriteString(" " + m.confirming.detail + "\n")
+		}
+		b.WriteString(" " + confirm.Render(m.confirming.question) + " " + dim.Render("[y/N] · any other key = cancel") + "\n")
+	} else if m.confirming != nil {
 		what := "Stop " + m.confirming.target
 		if m.confirming.action == StopAllEject {
 			what = "Stop every target and eject " + m.snap.Drive
@@ -473,6 +542,13 @@ func (m Model) View() string {
 		}
 	}
 	return b.String()
+}
+
+func kindLabel(r Row) string {
+	if len(r.DependsOn) > 0 {
+		return r.Kind + "  → " + strings.Join(r.DependsOn, ", ")
+	}
+	return r.Kind
 }
 
 // wrapList writes items after a prefix, separated by ", ", wrapping onto lines indented under the

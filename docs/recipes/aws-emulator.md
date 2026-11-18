@@ -72,7 +72,6 @@ set -eu
 PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
 PORT=9297
 
-container system start
 container delete aws-emulator >/dev/null 2>&1 || true
 # Per-run credentials and CA left behind by an unclean stop.
 rm -rf "$HOME/.aws/emulator/$PORT"
@@ -126,8 +125,13 @@ Add to `~/.config/dockguard/dockguard.yaml`:
 
 ```yaml
 targets:
+  container:
+    kind: container-system
+    data_path: /Volumes/ExternalSSD/container-data
+
   aws-emulator:
     kind: container
+    depends_on: [container]
     up: ~/.config/dockguard/aws-emulator-up.sh
     down: ~/.config/dockguard/aws-emulator-down.sh
     containers: [aws-emulator]
@@ -151,8 +155,11 @@ aws-emulator is ephemeral: its data is discarded on stop.
 aws-emulator stop requested.
 ```
 
-Add `stop_system: true` if nothing else uses Apple container and you want `stop` to stop its system
-service too.
+Reuse an existing `container-system` target if your config already has one. Starting the
+emulator asks before starting that prerequisite when needed; stopping the emulator leaves
+the shared system running. Use `dockguard stop container` to stop it, with a confirmation
+for active dependents, or `dockguard stop --all --eject` to stop everything in order.
+For older configs, see [Migrating from `stop_system`](../../README.md#migrating-from-stop_system).
 
 ## 4. Clients
 

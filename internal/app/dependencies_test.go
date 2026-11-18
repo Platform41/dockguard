@@ -228,6 +228,24 @@ func TestNoDependenciesPreservesSingleTargetStopOutput(t *testing.T) {
 	}
 }
 
+func TestStopDependentNoticeAgreesWithCount(t *testing.T) {
+	for _, count := range []int{1, 2} {
+		t.Run(string(rune('0'+count)), func(t *testing.T) {
+			nodes := []*dependencyFake{node("container", target.Running), node("myapp", target.Running, "container")}
+			want := "myapp depends on container and is running.\n"
+			if count == 2 {
+				nodes = append(nodes, node("other", target.Running, "container"))
+				want = "myapp and other depend on container and are running.\n"
+			}
+			h, calls, _, _ := dependencySetup(t, false, "", nodes...)
+			code, _ := Run([]string{"stop", "container"})
+			if code != 1 || len(*calls) != 0 || !strings.Contains(h.out.String(), want) {
+				t.Fatalf("code %d calls %v output %s", code, *calls, h.out)
+			}
+		})
+	}
+}
+
 func TestContainerSystemRunningBlocksEject(t *testing.T) {
 	system, app := node("system", target.Running), node("myapp", target.Running, "system")
 	system.kind = config.KindContainerSystem
