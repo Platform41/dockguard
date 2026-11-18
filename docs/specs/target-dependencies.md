@@ -1,6 +1,6 @@
 # Proposal — Target dependencies (`depends_on`) and the container-system target
 
-**Status:** Proposed
+**Status:** Approved by Azrad, 2026-11-18
 **Target:** v0.8.0
 **Owner:** One
 **Builder:** Three
@@ -197,9 +197,9 @@ dashboard confirmations. Live check (maintainer): migrate the real config (`cont
 scripts), then `start fizzy` with the system stopped (answer y), `stop container` with stacks running
 (answer y), and `stop --all --eject`.
 
-## 8. Decision requested
+## 8. Approved decision
 
-Approve for v0.8.0 as **D-024**, amending D-017:
+Approved for v0.8.0 as **D-024** (amends D-017), all four items:
 
 1. `depends_on` on every target and the `container-system` kind (§3.1);
 2. interactive `[y/N]` (default No) to start missing dependencies and to stop running dependents;
