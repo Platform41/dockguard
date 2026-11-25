@@ -682,7 +682,7 @@ func TestDashboardSnapshotIncludesHolders(t *testing.T) {
 	entries, _ := buildTargets(cfg)
 
 	got := (&controller{cfg: cfg, entries: entries}).Snapshot()
-	if len(got.Holders) != 1 || got.Holders[0] != (ui.Holder{Name: "zsh", PID: 23721}) ||
+	if len(got.Holders) != 1 || got.Holders[0] != (ui.Holder{Name: "zsh", PID: 23721, Class: "other user", Hint: "owned by 0; DockGuard doesn't use sudo"}) ||
 		!strings.Contains(got.HolderErr, "inspection incomplete") {
 		t.Fatalf("snapshot = %#v", got)
 	}

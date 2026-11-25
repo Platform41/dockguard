@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"strings"
@@ -28,6 +29,14 @@ func (f *dependencyCtl) RunConfirmed(a Action, name string, p Confirmation) (boo
 	f.approval = p
 	return true, "done"
 }
+func (f *dependencyCtl) BeginStop(ctx context.Context, a Action, name string, p *Confirmation) StopSequence {
+	if p == nil {
+		return f.fakeCtl.BeginStop(ctx, a, name, nil)
+	}
+	ok, output := f.RunConfirmed(a, name, *p)
+	return finishedStop{StopUpdate{OK: ok, Output: output}}
+}
+
 func dependencyModel(f *dependencyCtl) Model {
 	next, _ := New(f).Update(snapshotMsg(f.snap))
 	return next.(Model)

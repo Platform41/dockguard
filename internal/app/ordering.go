@@ -78,7 +78,13 @@ func runStopAll(cfg config.Config, entries []entry, eject bool, prompts *stopPro
 				}
 			}
 		}
+		if err := prompts.context().Err(); err != nil {
+			return 1, err
+		}
 		requested, stopErr := stop()
+		if err := prompts.context().Err(); err != nil {
+			return 1, err
+		}
 		if stopErr == nil {
 			if requested {
 				output.PrintStopped(display(e))
@@ -109,7 +115,7 @@ func runStopAll(cfg config.Config, entries []entry, eject bool, prompts *stopPro
 		}
 	}
 	if !hasSystem {
-		failed = stopLegacySystems(entries, justStopped, failed)
+		failed = stopLegacySystems(entries, justStopped, failed, prompts)
 	}
 	return finishStopAll(cfg, entries, eject, justStopped, failed, prompts)
 }
