@@ -38,7 +38,7 @@ func runHolders(cfg config.Config, stop bool) (int, error) {
 	if cwdErr != nil {
 		fmt.Fprintln(output.Out, cwdErr)
 	}
-	if !stop {
+	if !stop || len(candidates) == 0 {
 		return holderExit(candidates), nil
 	}
 
@@ -46,9 +46,6 @@ func runHolders(cfg config.Config, stop bool) (int, error) {
 	if ask == nil {
 		printManualQuit(candidates)
 		return 1, errors.New("dockguard holders --stop needs a terminal")
-	}
-	if len(candidates) == 0 {
-		return holderExit(candidates), nil
 	}
 	remaining, err := stopHolders(cfg.Drive, s, candidates, ask)
 	printHolders(remaining)

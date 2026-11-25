@@ -58,12 +58,15 @@ func TestHoldersCLI(t *testing.T) {
 		{name: "AS125", code: 2, scanErr: errors.New("lsof timed out")},
 		{name: "AS126", code: 1, stop: true, terminal: true, input: "no\n", initial: []platform.Holder{editor}, contains: []string{"Quit it? [Y/n]", "still using the drive"}},
 		{name: "AS136", code: 1, stop: true, initial: []platform.Holder{editor}, contains: []string{"needs a terminal", "kill 42"}},
-		{name: "AS136-clear", code: 1, stop: true, contains: []string{"needs a terminal"}},
+		{name: "AS136-clear", code: 0, stop: true, contains: []string{"no processes are using the drive"}},
 		{name: "AS156", code: 2, stop: true, terminal: true, input: "n\n", initial: []platform.Holder{editor}, rescanErr: errors.New("lsof timed out")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := setup(t, true, false)
 			holderCLI(t, tt.terminal, tt.input)
+			if tt.name == "AS136-clear" {
+				dependencyTerminal = func() bool { t.Fatal("terminal checked with no holders"); return false }
+			}
 			scans := 0
 			holdersOf = func(string) ([]platform.Holder, error) {
 				scans++
@@ -77,7 +80,7 @@ func TestHoldersCLI(t *testing.T) {
 				args = append(args, "--stop")
 			}
 			code, err := Run(args)
-			if code != tt.code || (err != nil) != (code == 2 || strings.HasPrefix(tt.name, "AS136")) {
+			if code != tt.code || (err != nil) != (code == 2 || tt.name == "AS136") {
 				t.Fatalf("Run = %d, %v; %s", code, err, h.out)
 			}
 			if code == 2 && !strings.Contains(err.Error(), "lsof timed out") {

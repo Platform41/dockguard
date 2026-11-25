@@ -108,7 +108,7 @@ func (s Service) Classify(list []platform.Holder) []Candidate {
 				switch hint := protectedHint(p.Path); {
 				case hint != "":
 					c.Class, c.Hint = Protected, hint
-				case p.Name != h.Name:
+				case !p.MatchesCommand(h.Name):
 					c.Hint = "already gone"
 				case parentErr != nil:
 					c.Hint = "couldn't verify DockGuard's ancestors: " + parentErr.Error()

@@ -164,3 +164,22 @@ func TestStopSequence(t *testing.T) {
 		})
 	}
 }
+
+func TestClassificationProtectsTerminalBeyondRootLogin(t *testing.T) {
+	terminal := platform.Holder{Name: "Terminal", PID: 10, UID: 501}
+	login := platform.Holder{Name: "login", PID: 20, UID: 0}
+	s := Service{
+		PID: 40, UID: 501,
+		Ancestors: func(int) ([]int, error) { return []int{30, login.PID, terminal.PID, 1}, nil },
+		Inspect: func(pid int) (platform.Process, error) {
+			t.Fatalf("tried to inspect ancestor PID %d", pid)
+			return platform.Process{}, nil
+		},
+	}
+	candidates := s.Classify([]platform.Holder{terminal, login})
+	for _, candidate := range candidates {
+		if candidate.Class != Self || candidate.CanStop() {
+			t.Errorf("ancestor classified as %v", candidate)
+		}
+	}
+}

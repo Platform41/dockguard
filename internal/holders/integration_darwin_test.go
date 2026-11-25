@@ -1,5 +1,3 @@
-//go:build cgo
-
 package holders
 
 import (
@@ -55,21 +53,19 @@ func TestStopOwnChild(t *testing.T) {
 			var process platform.Process
 			for {
 				process, err = platform.InspectProcess(pid)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if process.Name == "sleep" || !time.Now().Before(deadline) {
+				if err == nil && process.Name == "sleep" {
 					break
 				}
+				if !time.Now().Before(deadline) {
+					t.Fatalf("child process = %+v, %v", process, err)
+				}
 				time.Sleep(time.Millisecond)
-			}
-			if process.Name != "sleep" {
-				t.Fatalf("child process = %+v", process)
 			}
 
 			s := Service{
 				PID: os.Getpid(), UID: os.Geteuid(), Inspect: platform.InspectProcess,
-				Ancestors: platform.Ancestors, Now: time.Now, Sleep: time.Sleep,
+				Ancestors: func(int) ([]int, error) { return nil, nil },
+				Now:       time.Now, Sleep: time.Sleep,
 				Scan: func(path string) ([]platform.Holder, error) {
 					// Use a directory selection, restricted to the child PID, so a
 					// temporary folder can stand in for a mounted drive.

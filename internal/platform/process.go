@@ -3,6 +3,8 @@ package platform
 import (
 	"fmt"
 	"math"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -14,6 +16,16 @@ type Process struct {
 	Started time.Time
 	UID     int
 	PPID    int
+}
+
+// MatchesCommand compares the full lsof name with the kernel command. Darwin
+// limits P_comm to 16 bytes, so use the executable basename to corroborate a
+// longer name with that same prefix.
+func (p Process) MatchesCommand(name string) bool {
+	const maxKernelCommand = 16
+	return p.Name != "" && (p.Name == name ||
+		(len(p.Name) == maxKernelCommand && strings.HasPrefix(name, p.Name) &&
+			strings.HasPrefix(filepath.Base(p.Path), name)))
 }
 
 // Swappable for tests.
