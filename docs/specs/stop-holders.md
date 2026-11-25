@@ -1,6 +1,6 @@
 # Proposal — Stopping processes and containers that block the drive
 
-**Status:** Draft — awaiting approval
+**Status:** Approved by Azrad, 2026-11-25
 **Target:** v0.9.0
 **Owner:** One
 **Builder:** Three
@@ -241,9 +241,9 @@ force-quit, which can lose work, defaults to No. D-024's questions don't change.
   confirm the force-quit warning, and a throwaway unmanaged container blocking the system stop.
   Never run the live eject from a worktree on the drive itself.
 
-## 8. Decision requested
+## 8. Approved decision
 
-Approve as **D-025** (amends D-019 and D-024 §3.4):
+Approved for v0.9.0 as **D-025** (amends D-019 and D-024 §3.4):
 
 1. classification of holders, with only the current user's non-protected, non-self processes
    offered (§3.1);
