@@ -218,8 +218,8 @@ force-quit, which can lose work, defaults to No. D-024's questions don't change.
 | AS-144 | Enter alone at the quit or container question | Treated as yes |
 | AS-145 | Enter alone at the force-quit question | Treated as no; no SIGKILL |
 | AS-146 | Finder holds the drive | Offered; question says macOS relaunches it |
-| AS-147 | Dashboard `x` with stoppable holders, all answered yes | Holders stopped, re-scan clean, drive ejected |
-| AS-148 | Dashboard `x`, `esc` at a question | Remaining questions dropped; nothing more stopped; no eject |
+| AS-147 | Dashboard `E` with stoppable holders, all answered yes | Holders stopped, re-scan clean, drive ejected |
+| AS-148 | Dashboard `E`, `esc` at a question | Remaining questions dropped; nothing more stopped; no eject |
 | AS-149 | Dashboard `p` with holders | Same questions as `holders --stop`; no eject; Eject line refreshed |
 | AS-150 | Dashboard `p` with no holders, or drive unmounted | Key not shown; pressing it does nothing |
 | AS-151 | Dashboard during a 5-second quit wait | Input stays responsive; `esc` cancels remaining questions; refresh resumes after the sequence |
