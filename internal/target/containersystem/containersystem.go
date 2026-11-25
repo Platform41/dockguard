@@ -92,13 +92,40 @@ func (t *Target) Stop() (bool, error) {
 		return false, nil
 	}
 	if others := containerstate.OtherRunning(snap, t.managed); len(others) > 0 {
-		return false, fmt.Errorf("not stopping the container system: unmanaged containers are running (%s); stopping it would stop them too", strings.Join(others, ", "))
+		return false, &UnmanagedError{Names: others}
 	}
 	out, code, err := run("container", "system", "stop")
 	if err != nil || code != 0 {
 		return false, fmt.Errorf("container system stop: exit %d: %s %v", code, strings.TrimSpace(out), err)
 	}
 	return true, nil
+}
+
+// UnmanagedError identifies the running containers preventing a system stop.
+type UnmanagedError struct {
+	Names []string
+}
+
+func (e *UnmanagedError) Error() string {
+	return fmt.Sprintf("not stopping the container system: unmanaged containers are running (%s); stopping it would stop them too", strings.Join(e.Names, ", "))
+}
+
+// StopUnmanaged stops only the explicitly named container. Configured containers
+// are stopped through their own targets.
+func (t *Target) StopUnmanaged(name string) error {
+	if name == "" || strings.HasPrefix(name, "-") {
+		return fmt.Errorf("invalid container name %q", name)
+	}
+	for _, managed := range t.managed {
+		if name == managed {
+			return fmt.Errorf("container %s is managed by a configured target", name)
+		}
+	}
+	out, code, err := run("container", "stop", name)
+	if err != nil || code != 0 {
+		return fmt.Errorf("container stop %s: exit %d: %s %v", name, code, strings.TrimSpace(out), err)
+	}
+	return nil
 }
 
 var _ target.Target = (*Target)(nil)

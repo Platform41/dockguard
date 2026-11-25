@@ -41,11 +41,12 @@ var (
 )
 
 type options struct {
-	Command    string
-	Target     string
-	ConfigPath string
-	Eject      bool
-	All        bool
+	Command     string
+	Target      string
+	ConfigPath  string
+	Eject       bool
+	All         bool
+	StopHolders bool
 }
 
 // entry pairs a target with its config.
@@ -82,6 +83,9 @@ func Run(args []string) (int, error) {
 	if opts.Command == "mount" {
 		return runMount(cfg)
 	}
+	if opts.Command == "holders" {
+		return runHolders(cfg, opts.StopHolders)
+	}
 	entries, err := buildTargets(cfg)
 	if err != nil {
 		return 1, err
@@ -96,7 +100,7 @@ func Run(args []string) (int, error) {
 		return runDashboard(cfg, entries)
 	}
 	if opts.All {
-		return runStopAll(cfg, entries, opts.Eject)
+		return runStopAll(cfg, entries, opts.Eject, &stopPrompts{})
 	}
 
 	name := opts.Target
@@ -118,7 +122,7 @@ func Run(args []string) (int, error) {
 	}
 }
 
-var commands = map[string]bool{"drive": true, "mount": true, "ui": true, "version": true, "list": true, "status": true, "check": true, "start": true, "stop": true, "help": true, "--help": true, "-h": true}
+var commands = map[string]bool{"holders": true, "drive": true, "mount": true, "ui": true, "version": true, "list": true, "status": true, "check": true, "start": true, "stop": true, "help": true, "--help": true, "-h": true}
 var takesTarget = map[string]bool{"check": true, "start": true, "stop": true}
 
 func parseArgs(args []string) (options, error) {
@@ -142,6 +146,8 @@ func parseArgs(args []string) (options, error) {
 			i++
 		case arg == "--eject":
 			opts.Eject = true
+		case arg == "--stop" && opts.Command == "holders":
+			opts.StopHolders = true
 		case arg == "--all":
 			opts.All = true
 		case strings.HasPrefix(arg, "-"):
@@ -386,8 +392,8 @@ func startTarget(cfg config.Config, e entry) (int, error) {
 	return 0, nil
 }
 
-func stopTarget(cfg config.Config, entries []entry, e entry, eject bool) (int, error) {
-	stopRequested, err := e.t.Stop()
+func stopTarget(cfg config.Config, entries []entry, e entry, eject bool, prompts *stopPrompts) (int, error) {
+	stopRequested, err := stopWithUnmanagedContainers(e, prompts)
 	if err != nil {
 		return 1, err
 	}
@@ -405,7 +411,7 @@ func stopTarget(cfg config.Config, entries []entry, e entry, eject bool) (int, e
 	if stopRequested {
 		justStopped[e.t.Name()] = true
 	}
-	return ejectIfAllStopped(cfg, entries, justStopped)
+	return ejectIfAllStopped(cfg, entries, justStopped, prompts)
 }
 
 // sharedSystemStopper is implemented by targets that run on a shared system service (container
@@ -420,7 +426,7 @@ var _ sharedSystemStopper = (*containerkind.Target)(nil)
 
 // runStopAllLegacy preserves v0.7 behavior for configs without dependencies or an explicit
 // container-system target: reverse config order, then the shared-system pass.
-func runStopAllLegacy(cfg config.Config, entries []entry, eject bool) (int, error) {
+func runStopAllLegacy(cfg config.Config, entries []entry, eject bool, prompts *stopPrompts) (int, error) {
 	justStopped := map[string]bool{}
 	var failed []string
 
@@ -450,7 +456,7 @@ func runStopAllLegacy(cfg config.Config, entries []entry, eject bool) (int, erro
 	// Second pass: every managed stack is down now, so only unmanaged containers can still stop a
 	// shared system from shutting down. A stack that failed above is skipped.
 	failed = stopLegacySystems(entries, justStopped, failed)
-	return finishStopAll(cfg, entries, eject, justStopped, failed)
+	return finishStopAll(cfg, entries, eject, justStopped, failed, prompts)
 }
 
 func stopLegacySystems(entries []entry, justStopped map[string]bool, failed []string) []string {
@@ -478,7 +484,7 @@ func stopLegacySystems(entries []entry, justStopped map[string]bool, failed []st
 	return failed
 }
 
-func finishStopAll(cfg config.Config, entries []entry, eject bool, justStopped map[string]bool, failed []string) (int, error) {
+func finishStopAll(cfg config.Config, entries []entry, eject bool, justStopped map[string]bool, failed []string, prompts *stopPrompts) (int, error) {
 	if len(failed) > 0 {
 		if eject {
 			output.PrintNotEjecting(cfg.Drive, "these targets failed to stop: "+strings.Join(failed, ", "))
@@ -488,12 +494,12 @@ func finishStopAll(cfg config.Config, entries []entry, eject bool, justStopped m
 	if !eject {
 		return 0, nil
 	}
-	return ejectIfAllStopped(cfg, entries, justStopped)
+	return ejectIfAllStopped(cfg, entries, justStopped, prompts)
 }
 
 // ejectIfAllStopped is the eject rule (spec §2.3): probe every target again, waiting for the ones
 // just stopped, and eject only when every target is confirmed stopped.
-func ejectIfAllStopped(cfg config.Config, entries []entry, justStopped map[string]bool) (int, error) {
+func ejectIfAllStopped(cfg config.Config, entries []entry, justStopped map[string]bool, prompts *stopPrompts) (int, error) {
 	s := driveStatus(cfg)
 	if cfg.DriveUUID != "" && !s.Mounted() {
 		return 1, fmt.Errorf("drive %s: %s (%s); nothing to eject", cfg.Drive, s.State, s.Message)
@@ -522,22 +528,8 @@ func ejectIfAllStopped(cfg config.Config, entries []entry, justStopped map[strin
 		return 1, errors.New("drive not ejected")
 	}
 
-	if err := releaseDriveCWD(cfg.Drive); err != nil {
-		output.PrintNotEjecting(cfg.Drive, err.Error())
-		return 1, errors.New("drive not ejected")
-	}
-	holders, holderErr := holdersOf(cfg.Drive)
-	if len(holders) > 0 {
-		reason := "still using the drive: " + platform.DescribeHolders(holders)
-		if holderErr != nil {
-			reason += "; process inspection incomplete: " + holderErr.Error()
-		}
-		output.PrintNotEjecting(cfg.Drive, reason)
-		return 1, errors.New("drive not ejected")
-	}
-	if holderErr != nil {
-		output.PrintNotEjecting(cfg.Drive, "couldn't inspect processes using the drive: "+holderErr.Error())
-		return 1, errors.New("drive not ejected")
+	if err := ejectHolderPreflight(cfg.Drive, prompts); err != nil {
+		return 1, err
 	}
 
 	if cfg.DriveUUID != "" {

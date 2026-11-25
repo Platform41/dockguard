@@ -171,7 +171,7 @@ func TestExplicitSystemDisablesLegacyPass(t *testing.T) {
 	sentinel := &systemPassSentinel{dependencyFake: stack}
 	entries[1].t = sentinel
 	buildTargets = func(config.Config) ([]entry, error) { return entries, nil }
-	code, err := runStopAll(cfg, entries, false)
+	code, err := runStopAll(cfg, entries, false, nil)
 	if code != 0 || err != nil || sentinel.legacyCalls != 0 || !reflect.DeepEqual(*calls, []string{"stop stack", "stop system"}) {
 		t.Fatalf("%d %v calls %v legacy calls %d", code, err, *calls, sentinel.legacyCalls)
 	}

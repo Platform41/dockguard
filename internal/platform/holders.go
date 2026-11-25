@@ -15,6 +15,9 @@ import (
 type Holder struct {
 	Name string
 	PID  int
+	UID  int // -1 when lsof does not report a UID
+	User string
+	PPID int
 }
 
 func (h Holder) String() string { return fmt.Sprintf("%s (PID %d)", h.Name, h.PID) }
@@ -45,12 +48,15 @@ func runLsofWithTimeout(name string, args ...string) (output string, code int, e
 // Holders lists the processes with files open on the volume mounted at mountPath, using lsof's
 // field output. lsof exits 1 when it finds nothing, which is an empty list, not an error.
 func Holders(mountPath string) ([]Holder, error) {
-	output, code, err := runLsof("lsof", "+c", "0", "-Fpc", "+f", "--", mountPath)
+	output, code, err := runLsof("lsof", "+c", "0", "-FpcuLR", "+f", "--", mountPath)
 	if err != nil {
 		return nil, fmt.Errorf("lsof: %w", err)
 	}
-	if code != 0 && strings.TrimSpace(output) == "" {
-		return nil, nil
+	if strings.TrimSpace(output) == "" {
+		if code == 0 || code == 1 {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("lsof inspection failed: exit %d", code)
 	}
 	holders := parseLsof(output)
 	if code != 0 || strings.Contains(output, "lsof:") {
@@ -59,39 +65,53 @@ func Holders(mountPath string) ([]Holder, error) {
 	return holders, nil
 }
 
-// parseLsof reads "p<pid>" and "c<command>" lines; other fields (such as "f<fd>") are ignored.
+// parseLsof reads process fields in the order lsof emits them. A new PID starts a
+// fresh record, even if the previous record had fields that this one omits.
 func parseLsof(output string) []Holder {
-	byPID := map[int]string{}
-	pid := 0
+	byPID := map[int]Holder{}
+	current := Holder{UID: -1}
+	save := func() {
+		if current.PID <= 0 || current.Name == "lsof" {
+			return
+		}
+		if current.Name == "" {
+			current.Name = "unknown process"
+		}
+		if current.User == "" && current.UID >= 0 {
+			current.User = strconv.Itoa(current.UID)
+		}
+		byPID[current.PID] = current
+	}
 	for _, line := range strings.Split(output, "\n") {
-		if len(line) < 2 {
+		if line == "" {
 			continue
 		}
+		value := line[1:]
 		switch line[0] {
 		case 'p':
-			if n, err := strconv.Atoi(line[1:]); err == nil {
-				pid = n
-				if _, seen := byPID[pid]; !seen {
-					byPID[pid] = ""
-				}
+			save()
+			pid, err := strconv.ParseInt(value, 10, 32)
+			current = Holder{UID: -1}
+			if err == nil {
+				current.PID = int(pid)
 			}
 		case 'c':
-			if pid != 0 {
-				byPID[pid] = line[1:]
+			current.Name = value
+		case 'u':
+			if uid, err := strconv.Atoi(value); err == nil && uid >= 0 {
+				current.UID = uid
 			}
+		case 'L':
+			current.User = value
+		case 'R':
+			current.PPID, _ = strconv.Atoi(value)
 		}
 	}
+	save()
 
 	holders := make([]Holder, 0, len(byPID))
-	for pid, name := range byPID {
-		// lsof itself shows up when it inherits a working folder on the drive; it's gone on retry.
-		if name == "lsof" {
-			continue
-		}
-		if name == "" {
-			name = "unknown process"
-		}
-		holders = append(holders, Holder{Name: name, PID: pid})
+	for _, h := range byPID {
+		holders = append(holders, h)
 	}
 	sort.Slice(holders, func(i, j int) bool { return holders[i].PID < holders[j].PID })
 	return holders

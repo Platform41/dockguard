@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/platform41/dockguard/internal/config"
+	"github.com/platform41/dockguard/internal/holders"
 	"github.com/platform41/dockguard/internal/output"
 	"github.com/platform41/dockguard/internal/target"
 )
@@ -78,20 +79,34 @@ func (g dependencyGraph) needs(name string) map[string]bool {
 	return result
 }
 
+// cliPrompt keeps a single reader across a command's questions so that
+// answers buffered while reading one line remain available to the next question.
+func cliPrompt() holders.Prompt {
+	if !dependencyTerminal() {
+		return nil
+	}
+	input := bufio.NewReader(dependencyInput)
+	return func(question string, defaultYes bool) bool {
+		suffix := " [y/N] "
+		if defaultYes {
+			suffix = " [Y/n] "
+		}
+		fmt.Fprint(output.Out, question+suffix)
+		answer, err := input.ReadString('\n')
+		fmt.Fprintln(output.Out)
+		if err != nil {
+			// Incomplete input at EOF is not consent.
+			return false
+		}
+		answer = strings.ToLower(strings.TrimSpace(answer))
+		return answer == "y" || answer == "yes" || (defaultYes && answer == "")
+	}
+}
+
 // askDependency is CLI-only. Dashboard actions must not compete with the TUI for stdin.
 func askDependency(question string) bool {
-	if !dependencyTerminal() {
-		return false
-	}
-	fmt.Fprint(output.Out, question+" [y/N] ")
-	answer, err := bufio.NewReader(dependencyInput).ReadString('\n')
-	fmt.Fprintln(output.Out)
-	if err != nil {
-		// Incomplete input at EOF is not consent.
-		return false
-	}
-	answer = strings.ToLower(strings.TrimSpace(answer))
-	return answer == "y" || answer == "yes"
+	ask := cliPrompt()
+	return ask != nil && ask(question, false)
 }
 
 // dependencyPlan is read-only until its caller explicitly confirms it.
@@ -231,16 +246,20 @@ func planStop(entries []entry, e entry) (dependencyPlan, error) {
 }
 
 func runStop(cfg config.Config, entries []entry, e entry, eject bool) (int, error) {
-	return stopWithDependencies(cfg, entries, e, eject, confirmDependency)
+	prompts := &stopPrompts{}
+	return stopWithDependencies(cfg, entries, e, eject, func(p dependencyPlan) bool {
+		ask := prompts.question()
+		return ask != nil && ask(p.question, false)
+	}, prompts)
 }
 
-func stopWithDependencies(cfg config.Config, entries []entry, e entry, eject bool, confirm func(dependencyPlan) bool) (int, error) {
+func stopWithDependencies(cfg config.Config, entries []entry, e entry, eject bool, confirm func(dependencyPlan) bool, prompts *stopPrompts) (int, error) {
 	p, err := planStop(entries, e)
 	if err != nil {
 		return 1, err
 	}
 	if len(p.items) == 0 {
-		return stopTarget(cfg, entries, e, eject)
+		return stopTarget(cfg, entries, e, eject, prompts)
 	}
 	fmt.Fprintln(output.Out, p.detail)
 	if !confirm(p) {
@@ -248,7 +267,7 @@ func stopWithDependencies(cfg config.Config, entries []entry, e entry, eject boo
 		return 1, nil
 	}
 	for _, dep := range p.items {
-		if code, err := stopTarget(cfg, entries, dep, false); code != 0 || err != nil {
+		if code, err := stopTarget(cfg, entries, dep, false, prompts); code != 0 || err != nil {
 			return code, err
 		}
 		state, err := dep.t.State()
@@ -260,7 +279,7 @@ func stopWithDependencies(cfg config.Config, entries []entry, e entry, eject boo
 			return 1, fmt.Errorf("dependent %s not confirmed stopped (%s)", dep.t.Name(), state)
 		}
 	}
-	return stopTarget(cfg, entries, e, eject)
+	return stopTarget(cfg, entries, e, eject, prompts)
 }
 
 func entryNames(entries []entry) []string {

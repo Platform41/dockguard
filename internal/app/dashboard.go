@@ -11,6 +11,8 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/charmbracelet/x/term"
+
 	"github.com/platform41/dockguard/internal/config"
 	"github.com/platform41/dockguard/internal/drive"
 	"github.com/platform41/dockguard/internal/output"
@@ -54,19 +56,13 @@ func releaseDriveCWD(drive string) error {
 		return nil
 	}
 	if err := chdir("/"); err != nil {
-		return fmt.Errorf("release dashboard working directory on %s: %w; relaunch DockGuard from outside the drive", drive, err)
+		return fmt.Errorf("release DockGuard working directory on %s: %w; relaunch DockGuard from outside the drive", drive, err)
 	}
 	return nil
 }
 
 func stdioIsTerminal() bool {
-	for _, f := range []*os.File{os.Stdin, os.Stdout} {
-		info, err := f.Stat()
-		if err != nil || info.Mode()&os.ModeCharDevice == 0 {
-			return false
-		}
-	}
-	return true
+	return term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd())
 }
 
 // controller implements ui.Controller with the same functions the CLI commands use, so the
@@ -183,7 +179,7 @@ func (c *controller) run(action ui.Action, name string, approval *ui.Confirmatio
 	if action == ui.Mount {
 		code, err = runMount(c.cfg)
 	} else if action == ui.StopAllEject {
-		code, err = runStopAll(c.cfg, c.entries, true)
+		code, err = runStopAll(c.cfg, c.entries, true, nil)
 	} else {
 		e, ok := find(c.entries, name)
 		if !ok {
@@ -193,7 +189,7 @@ func (c *controller) run(action ui.Action, name string, approval *ui.Confirmatio
 		case ui.Start:
 			code, err = startWithDependencies(c.cfg, c.entries, e, confirm)
 		case ui.Stop:
-			code, err = stopWithDependencies(c.cfg, c.entries, e, false, confirm)
+			code, err = stopWithDependencies(c.cfg, c.entries, e, false, confirm, nil)
 		case ui.Check:
 			code, err = runCheck(c.cfg, e)
 		}
