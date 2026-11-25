@@ -160,3 +160,25 @@ func TestSystemChecks(t *testing.T) {
 		t.Fatal("unknown home passed")
 	}
 }
+
+func TestStopUnmanagedOnlyStopsTheNamedContainer(t *testing.T) {
+	old := run
+	t.Cleanup(func() { run = old })
+	calls := 0
+	run = func(name string, args ...string) (string, int, error) {
+		calls++
+		if name != "container" || strings.Join(args, " ") != "stop buildkit" {
+			t.Fatalf("unexpected command: %s %v", name, args)
+		}
+		return "container is busy", 1, nil
+	}
+	system := systemTarget()
+	for _, name := range []string{"managed-app", "--all", ""} {
+		if err := system.StopUnmanaged(name); err == nil || calls != 0 {
+			t.Fatalf("stop %q = %v, calls = %d", name, err, calls)
+		}
+	}
+	if err := system.StopUnmanaged("buildkit"); err == nil || !strings.Contains(err.Error(), "container is busy") || calls != 1 {
+		t.Fatalf("stop buildkit = %v, calls = %d", err, calls)
+	}
+}

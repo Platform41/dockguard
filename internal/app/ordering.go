@@ -39,14 +39,14 @@ func (g dependencyGraph) stopOrder() []entry {
 	return order
 }
 
-func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
+func runStopAll(cfg config.Config, entries []entry, eject bool, prompts *stopPrompts) (int, error) {
 	hasDeps, hasSystem := false, false
 	for _, e := range entries {
 		hasDeps = hasDeps || len(e.cfg.DependsOn) > 0
 		hasSystem = hasSystem || e.cfg.Kind == config.KindContainerSystem
 	}
 	if !hasDeps && !hasSystem {
-		return runStopAllLegacy(cfg, entries, eject)
+		return runStopAllLegacy(cfg, entries, eject, prompts)
 	}
 	g, err := newDependencyGraph(entries)
 	if err != nil {
@@ -67,7 +67,7 @@ func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
 			output.PrintAlreadyStopped(display(e))
 			continue
 		}
-		stop := e.t.Stop
+		stop := func() (bool, error) { return stopWithUnmanagedContainers(e, prompts) }
 		probe := e.t.State
 		if !hasSystem {
 			if legacy, ok := e.t.(sharedSystemStopper); ok {
@@ -111,5 +111,5 @@ func runStopAll(cfg config.Config, entries []entry, eject bool) (int, error) {
 	if !hasSystem {
 		failed = stopLegacySystems(entries, justStopped, failed)
 	}
-	return finishStopAll(cfg, entries, eject, justStopped, failed)
+	return finishStopAll(cfg, entries, eject, justStopped, failed, prompts)
 }

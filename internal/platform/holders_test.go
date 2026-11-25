@@ -10,7 +10,7 @@ import (
 func TestParseLsof(t *testing.T) {
 	out := "p33061\ncGoogle Chrome\nf12\nf13\np18474\ncmdworker_shared\nf3\np33061\ncGoogle Chrome\nf14\np99\nclsof\nfcwd\n"
 	got := parseLsof(out)
-	if len(got) != 2 || got[0] != (Holder{"mdworker_shared", 18474}) || got[1] != (Holder{"Google Chrome", 33061}) {
+	if len(got) != 2 || got[0] != (Holder{Name: "mdworker_shared", PID: 18474, UID: -1}) || got[1] != (Holder{Name: "Google Chrome", PID: 33061, UID: -1}) {
 		t.Fatalf("parseLsof = %#v", got)
 	}
 }
@@ -34,7 +34,7 @@ func TestHoldersUsesFieldOutputWithFullNames(t *testing.T) {
 	if _, err := Holders("/Volumes/X"); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(args, " "); got != "+c 0 -Fpc +f -- /Volumes/X" {
+	if got := strings.Join(args, " "); got != "+c 0 -FpcuLR +f -- /Volumes/X" {
 		t.Fatalf("lsof args = %q", got)
 	}
 }
@@ -47,7 +47,7 @@ func TestHoldersReturnsParsedProcessesAndInspectionError(t *testing.T) {
 	}
 
 	holders, err := Holders("/Volumes/X")
-	if len(holders) != 1 || holders[0] != (Holder{"zsh", 42}) || err == nil ||
+	if len(holders) != 1 || holders[0] != (Holder{Name: "zsh", PID: 42, UID: -1}) || err == nil ||
 		!strings.Contains(err.Error(), "incomplete results") {
 		t.Fatalf("Holders = %#v, %v", holders, err)
 	}
@@ -74,7 +74,7 @@ func TestEjectVolumeNamesHoldersWhenBusy(t *testing.T) {
 	}
 	sleep = func(time.Duration) {}
 
-	holdersOf = func(string) ([]Holder, error) { return []Holder{{"Google Chrome", 33061}}, nil }
+	holdersOf = func(string) ([]Holder, error) { return []Holder{{Name: "Google Chrome", PID: 33061}}, nil }
 	err := EjectVolume("/Volumes/X")
 	if err == nil || !strings.Contains(err.Error(), "still using the drive: Google Chrome (PID 33061)") {
 		t.Fatalf("err = %v", err)
@@ -90,5 +90,22 @@ func TestEjectVolumeNamesHoldersWhenBusy(t *testing.T) {
 	err = EjectVolume("/Volumes/X")
 	if err == nil || !strings.Contains(err.Error(), "couldn't inspect") || !strings.Contains(err.Error(), "lsof timed out") {
 		t.Fatalf("inspection err = %v", err)
+	}
+}
+
+func TestParseLsofProcessFieldsAS155(t *testing.T) {
+	got := parseLsof("p8\nR2\nLalice\nu501\ncfirst\np9\nu502\ncsecond\npbroken\nu999\nLwrong\np10\ncthird\n")
+	want := []Holder{
+		{PID: 8, Name: "first", PPID: 2, UID: 501, User: "alice"},
+		{PID: 9, Name: "second", UID: 502, User: "502"},
+		{PID: 10, Name: "third", UID: -1},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %#v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("holder %d = %#v, want %#v", i, got[i], want[i])
+		}
 	}
 }

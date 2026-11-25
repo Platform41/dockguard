@@ -46,13 +46,12 @@
 
 ### This Week
 
-- [ ] `[v0.9.0] Stop processes and containers that block the drive (D-025)`
-  **Owner:** Three (build), One (review and release)
-  **Priority:** P2
-  **Spec:** `docs/specs/stop-holders.md` (approved 2026-11-25, AS-123 to AS-156)
-  **Next Action:** Write the build brief (slice 1: CLI and `holders` commands; slice 2: dashboard `E` and `p`).
-
 ### Doing
+
+- [ ] `[v0.9.0] Stop processes and containers that block the drive (D-025)`
+  **Priority:** P2
+  **Spec:** `docs/specs/stop-holders.md` (D-025, with clarifications in PR #38)
+  **Review:** [CLI slice 1 (PR #39)](https://github.com/Platform41/dockguard/pull/39)
 
 ### Review/Test
 
