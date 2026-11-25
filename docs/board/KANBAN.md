@@ -44,6 +44,12 @@
 
 ### Backlog
 
+- [ ] `[v0.9.0] Stop processes and containers that block the drive (D-025, proposed)`
+  **Owner:** One (proposal), Three (build)
+  **Priority:** P2
+  **Spec:** `docs/specs/stop-holders.md` (draft, awaiting approval)
+  **Next Action:** Approve or amend the proposal; then write the build brief.
+
 ### This Week
 
 ### Doing

@@ -1,0 +1,195 @@
+# Proposal — Stopping processes and containers that block the drive
+
+**Status:** Draft — awaiting approval
+**Target:** v0.9.0
+**Owner:** One
+**Builder:** Three
+**Date:** 2026-11-25
+**Amends:** D-019 (holders are named, never closed by DockGuard), D-024 §3.4 (unmanaged containers
+refuse the container-system stop)
+
+## 1. Problem
+
+DockGuard can tell the user *what* is holding the drive, but not do anything about it. Since v0.5.1
+(D-019), `stop --eject` and the dashboard name every process holding the volume and then leave the
+user to close each one. Since v0.8.0 (D-024), stopping the container system is refused while
+containers DockGuard doesn't manage are running.
+
+In practice a full "stop everything and eject" often takes several rounds of manual work:
+
+- the iOS Simulator service keeps files inside an Xcode installed on the drive open;
+- an Apple container build leaves its `buildkit` builder running, so the container-system stop is
+  refused;
+- a shell whose current directory is on the drive holds the volume.
+
+Each round is: run DockGuard, read the names, find and stop each process or container by hand, run
+DockGuard again.
+
+## 2. Outcome
+
+When processes or unmanaged containers are in the way, DockGuard offers to stop them, one at a
+time, with a `[y/N]` question whose default is No. Nothing is stopped without an explicit yes in a
+terminal. Processes DockGuard must not touch are still named, with the reason.
+
+Stopping a process can lose work (an editor with unsaved changes, a shell running a job). This is
+the first DockGuard action with that risk, so the rules below err towards asking and refusing.
+
+## 3. Product behaviour
+
+### 3.1 Which processes can be stopped
+
+DockGuard only ever considers processes the existing holder scan reports as holding the mounted
+volume (D-019's `lsof` query). Each holder is classified:
+
+| Class | Rule | Offered? |
+| --- | --- | --- |
+| **stoppable** | Owned by the current user and not in any class below | Yes |
+| **other user** | Owned by root or another user | No — named, with "owned by <user>; DockGuard doesn't use sudo" |
+| **self** | DockGuard's own PID and every ancestor (its shell, the terminal app) | No — named, with "relaunch DockGuard from outside the drive" for a shell holding it via its current directory |
+| **protected** | Built-in name list: `launchd`, `kernel_task`, `WindowServer`, `loginwindow`, `Finder`, `Dock`, `SystemUIServer`, `mds`, `mds_stores`, `mdworker`, `fseventsd` | No — named, with a fixed hint (for example "close Finder windows on the drive") |
+
+The protected list is fixed in code, not in config, for this release. Ancestors are found by
+walking parent PIDs from DockGuard's own process. No sudo: DockGuard has never needed elevated privileges (D-021).
+
+### 3.2 How a process is stopped
+
+For each stoppable holder, in PID order:
+
+```text
+nvim (PID 48213) is using /Volumes/ExternalSSD. Quit it? [y/N]
+```
+
+On yes:
+
+1. **Re-verify** that the PID still exists, still has the same command name and start time, and
+   still holds the volume. If not, report "already gone" or "no longer using the drive" and move
+   on. This prevents signalling a recycled PID.
+2. Send `SIGTERM` (an ordinary quit request).
+3. Wait up to 5 seconds, checking about every 250 ms whether the process has exited or released
+   the volume.
+4. If it still holds the volume, ask a second question, default No:
+
+   ```text
+   nvim (PID 48213) didn't quit. Force-quit it? Unsaved work will be lost. [y/N]
+   ```
+
+   On yes, re-verify as in step 1, then send `SIGKILL` and confirm the process is gone.
+
+On no, the holder is left running and reported as still blocking. A failed signal (for example
+`EPERM`) is reported with the error and treated as still blocking.
+
+### 3.3 Unmanaged containers
+
+When stopping the container system is refused because containers outside any DockGuard target are
+running (D-024 §3.4), DockGuard asks about each one:
+
+```text
+Container buildkit is running and isn't managed by DockGuard. Stop it? [y/N]
+```
+
+On yes it runs `container stop <name>`, never `container delete` and never a signal to the
+container runtime's PIDs, which could damage the virtual machine. After the answers, DockGuard
+re-checks; if no unmanaged containers remain, the container-system stop proceeds. Containers stopped
+this way can be started again with `container start <name>`, so this is printed after each stop.
+
+### 3.4 Entry points
+
+**`stop --all --eject` and `stop <target> --eject`.** Targets are stopped first, as today. If the
+holder preflight then finds holders:
+
+- in a terminal: name every holder with its class, then ask about each stoppable one (§3.2). After
+  the last answer, re-scan. If nothing holds the volume, eject as today. Otherwise refuse, naming
+  what's left, exit 1, and don't call `diskutil`;
+- not in a terminal: refuse exactly as today, adding the command a user would run
+  (`kill <pid>`) for each stoppable holder.
+
+The same applies to the container-system step of `stop --all`, using §3.3.
+
+**`dockguard holders`** (new). Prints the holders of the mounted drive with their class, or "no
+processes are using the drive". Exit 0 when there are no holders, 1 when there are, 2 when the scan
+fails. It never stops anything.
+
+**`dockguard holders --stop`** (new). The same list, then the §3.2 questions for each stoppable
+holder, then a re-scan. Refuses without a terminal. Exit codes as `holders`, judged on the re-scan.
+
+Commands without `--eject`, and `list` and `status`, don't change.
+
+### 3.5 Dashboard
+
+No change in this release. The dashboard keeps naming holders (D-019). A dashboard key that runs the
+same questions is a follow-up once the CLI behaviour has been used for a while.
+
+## 4. Architecture
+
+- `internal/platform`:
+  - extend `Holder` with `UID`, `User` and `PPID`, read from the same `lsof` call by adding the
+    `u`, `L` and `R` fields to `-F`;
+  - add process inspection (exists, command name, start time) and `Signal(pid, sig)`, isolated so
+    tests can replace them;
+  - add `Ancestors(pid)` walking parent PIDs.
+- New `internal/holders` (or within `internal/app`): classification (§3.1), the stop sequence
+  (§3.2) with injected clock, signaller and prompt, and the result per holder
+  (`stopped`, `force-stopped`, `declined`, `gone`, `failed`, `not offered`).
+- `internal/target/containersystem`: return the unmanaged container names as structured data, not
+  only an error string, so §3.3 can ask about them. The prompt itself stays in `internal/app`, next
+  to D-024's `askDependency`, and reuses its TTY and default-No rules.
+- `internal/app`: wire `holders`, `holders --stop` and the eject and `stop --all` flows.
+
+## 5. Out of scope
+
+- sudo, or stopping root-owned or other users' processes.
+- A config-driven protected list or allow-list.
+- Stopping holders without a terminal (no `--yes` flag in this release).
+- Killing container runtime processes, `container delete`, or stopping containers that belong to a
+  configured target outside its own `down` script.
+- Dashboard actions (§3.5).
+
+## 6. Acceptance scenarios
+
+| ID | Scenario | Expected |
+| --- | --- | --- |
+| AS-123 | `holders` with nothing on the drive | "no processes are using the drive", exit 0 |
+| AS-124 | `holders` with holders of every class | Each named with its class and hint, exit 1; nothing signalled |
+| AS-125 | `holders` when the scan fails or times out | Inspection error, exit 2 |
+| AS-126 | `holders --stop`, user answers no | Nothing signalled; holder reported as still blocking; exit 1 |
+| AS-127 | `holders --stop`, yes, process quits on SIGTERM | "quit"; re-scan clean; exit 0; no SIGKILL question |
+| AS-128 | Yes, process ignores SIGTERM, user answers yes to force-quit | SIGKILL sent after re-verification; "force-quit"; exit 0 when clean |
+| AS-129 | Yes, process ignores SIGTERM, user answers no to force-quit | No SIGKILL; reported as still blocking; exit 1 |
+| AS-130 | PID exited or was reused between scan and signal | No signal sent; "already gone"; continues |
+| AS-131 | Process releases the drive but keeps running after SIGTERM | Counted as released; no force-quit question |
+| AS-132 | Root-owned or other user's holder | Not offered; named with owner and "doesn't use sudo" |
+| AS-133 | DockGuard's own shell holds the drive (current directory) | Not offered; named with the relaunch hint |
+| AS-134 | Holder on the protected list (for example Finder) | Not offered; named with its fixed hint |
+| AS-135 | Signal fails (EPERM) | Error reported; counted as still blocking |
+| AS-136 | `holders --stop` without a terminal | Refused, with `kill <pid>` per stoppable holder; nothing signalled |
+| AS-137 | `stop --all --eject` in a terminal, holders all stopped | Re-scan clean; `diskutil eject` called |
+| AS-138 | `stop --all --eject` in a terminal, one holder declined | Refused, naming it; exit 1; `diskutil` not called |
+| AS-139 | `stop --all --eject` without a terminal, holders present | Same refusal as v0.8.0 plus `kill <pid>` lines |
+| AS-140 | Container-system stop refused by an unmanaged container, user answers yes | `container stop <name>` run; restart hint printed; system stop proceeds |
+| AS-141 | Same, user answers no | Refusal as in v0.8.0; nothing stopped |
+| AS-142 | Unmanaged container stop fails | Error reported; system stop refused |
+| AS-143 | No holders and no unmanaged containers | Output and behaviour identical to v0.8.0 |
+
+## 7. Test plan
+
+- Unit tests with injected scanner, process inspector, signaller, clock and prompt cover AS-123 to
+  AS-143 without signalling real processes.
+- One integration test starts a throwaway child process (`sleep` with its current directory in a
+  temporary folder treated as the mount path), stops it through the real signaller, and covers a
+  child that traps SIGTERM to exercise the force-quit path.
+- Live check on a real drive: a `sleep` holding the volume, an editor with an unsaved file to
+  confirm the force-quit warning, and a throwaway unmanaged container blocking the system stop.
+  Never run the live eject from a worktree on the drive itself.
+
+## 8. Decision requested
+
+Approve as **D-025** (amends D-019 and D-024 §3.4):
+
+1. classification of holders, with only the current user's non-protected, non-self processes
+   offered (§3.1);
+2. per-process `[y/N]` (default No), SIGTERM then an optional SIGKILL after 5 seconds, with
+   re-verification before every signal (§3.2);
+3. per-container `[y/N]` to `container stop` unmanaged containers blocking the container-system
+   stop (§3.3);
+4. offered inside `--eject` flows and through new `holders` / `holders --stop` commands; refused
+   without a terminal; no dashboard change yet (§3.4, §3.5).
