@@ -5,7 +5,7 @@
 **Owner:** One
 **Builder:** Three
 **Date:** 2026-11-25
-**Revised:** 2026-11-25 (maintainer answers: Finder stoppable, quit defaults to Yes, dashboard in scope)
+**Revised:** 2026-11-25 (maintainer answers: Finder stoppable, quit defaults to Yes, dashboard in scope; cross-review findings applied)
 **Amends:** D-019 (holders are named, never closed by DockGuard), D-024 §3.4 (unmanaged containers
 refuse the container-system stop)
 
@@ -48,12 +48,15 @@ volume (D-019's `lsof` query). Each holder is classified:
 | **stoppable** | Owned by the current user and not in any class below | Yes |
 | **other user** | Owned by root or another user | No — named, with "owned by <user>; DockGuard doesn't use sudo" |
 | **self** | DockGuard's own PID and every ancestor (its shell, the terminal app) | No — named, with "relaunch DockGuard from outside the drive" for a shell holding it via its current directory |
-| **protected** | Built-in name list: `launchd`, `kernel_task`, `WindowServer`, `loginwindow`, `Dock`, `SystemUIServer`, `mds`, `mds_stores`, `mdworker`, `fseventsd` | No — named, with a fixed hint (for example "Spotlight is indexing the drive; wait or exclude it in System Settings") |
+| **protected** | Built-in list matched on the executable path, not the `lsof` command name: `launchd`, `kernel_task`, `WindowServer`, `loginwindow`, `Dock`, `SystemUIServer`, `mds`, `mds_stores`, `mdworker*` (prefix, covers `mdworker_shared`), `fseventsd`, and only when the executable lives under `/System/`, `/usr/` or `/sbin/` | No — named, with a fixed hint (for example "Spotlight is indexing the drive; wait or exclude it in System Settings") |
 
 The protected list is fixed in code, not in config, for this release. Finder is deliberately not
 on it: it's stoppable, and the question says that macOS relaunches it straight away, which is
 usually enough to release a Finder window open on the drive. Ancestors are found by
-walking parent PIDs from DockGuard's own process. No sudo: DockGuard has never needed elevated privileges (D-021).
+walking parent PIDs from DockGuard's own process. Classification runs **after** DockGuard has
+released its own current-directory hold (D-019 §3.3), in the CLI commands of §3.4 as well as the
+dashboard; if that release can't be done safely, DockGuard's own PID stays a named self holder
+with the relaunch hint, as D-019 already specifies. No sudo: DockGuard has never needed elevated privileges (D-021).
 
 ### 3.2 How a process is stopped
 
@@ -72,8 +75,9 @@ On yes:
    still holds the volume. If not, report "already gone" or "no longer using the drive" and move
    on. This prevents signalling a recycled PID.
 2. Send `SIGTERM` (an ordinary quit request).
-3. Wait up to 5 seconds, checking about every 250 ms whether the process has exited or released
-   the volume.
+3. Wait up to 5 seconds. Check whether the process still exists about every 250 ms with
+   `kill(pid, 0)`, which is cheap; run the holder scan at most once a second to see whether it has
+   released the volume, and once more at the end of the wait.
 4. If it still holds the volume, ask a second question, default No:
 
    ```text
@@ -82,7 +86,8 @@ On yes:
 
    Enter alone means No for this question, because a force-quit can lose work.
 
-   On yes, re-verify as in step 1, then send `SIGKILL` and confirm the process is gone.
+   On yes, re-verify as in step 1 again (the PID may have been recycled during the wait), then
+   send `SIGKILL` and confirm the process is gone.
 
 On no, the holder is left running and reported as still blocking. A failed signal (for example
 `EPERM`) is reported with the error and treated as still blocking.
@@ -116,12 +121,18 @@ holder preflight then finds holders:
 
 The same applies to the container-system step of `stop --all`, using §3.3.
 
+This amends D-024 §3.4, which says `stop --all` asks no questions. Target stops in `stop --all`
+still ask nothing. The only questions are the ones in this proposal: about holders in the eject
+preflight, and about unmanaged containers at the container-system step. Without a terminal both
+keep v0.8.0's refusal.
+
 **`dockguard holders`** (new). Prints the holders of the mounted drive with their class, or "no
 processes are using the drive". Exit 0 when there are no holders, 1 when there are, 2 when the scan
 fails. It never stops anything.
 
 **`dockguard holders --stop`** (new). The same list, then the §3.2 questions for each stoppable
-holder, then a re-scan. Refuses without a terminal. Exit codes as `holders`, judged on the re-scan.
+holder, then a re-scan. Refuses without a terminal. Exit codes as `holders`, judged on the re-scan; a failed or timed-out
+re-scan exits 2.
 
 Commands without `--eject`, and `list` and `status`, don't change.
 
@@ -131,12 +142,16 @@ The dashboard asks the same questions with its existing confirmation area (the o
 dependency questions). `y` answers yes, `n` answers no, Enter takes the question's default, and
 `esc` cancels the remaining questions without stopping anything else.
 
-- **`x` (stop all and eject):** after targets stop, holders and unmanaged containers in the way are
-  asked about in turn (§3.2, §3.3), then the eject preflight runs again and ejects if clear.
+- **`E` (stop all and eject, D-018):** after targets stop, holders and unmanaged containers in the
+  way are asked about in turn (§3.2, §3.3), then the eject preflight runs again and ejects if
+  clear. `x` keeps stopping the selected target.
 - **`p` (new, processes):** asks about every stoppable holder without ejecting. Shown in the key
   help only while the drive is mounted and the last holder scan found holders.
-- The Eject line keeps naming every holder with its class (D-019). While questions are open, the
-  dashboard keeps refreshing status but doesn't start another holder action.
+- The Eject line keeps naming every holder with its class (D-019).
+- A stop sequence is a dashboard action like any other: it runs as a command, the dashboard's
+  existing one-action-at-a-time rule applies, and status refresh pauses until it ends (as for every
+  action today). Input stays responsive, so `esc` can cancel the remaining questions during a
+  5-second wait; the process already signalled is still waited for and reported.
 
 ### 3.6 Answer defaults and D-024
 
@@ -148,7 +163,10 @@ force-quit, which can lose work, defaults to No. D-024's questions don't change.
 
 - `internal/platform`:
   - extend `Holder` with `UID`, `User` and `PPID`, read from the same `lsof` call by adding the
-    `u`, `L` and `R` fields to `-F`;
+    `u`, `L` and `R` fields to `-F`. `lsof` emits fields in its own per-process order, not the
+    requested order, so the parser starts a new holder on each `p` line and resets the other fields
+    there. `L` can be missing when the login name can't be resolved; the user is then shown as the
+    numeric UID;
   - add process inspection (exists, command name, start time) and `Signal(pid, sig)`, isolated so
     tests can replace them;
   - add `Ancestors(pid)` walking parent PIDs.
@@ -159,9 +177,10 @@ force-quit, which can lose work, defaults to No. D-024's questions don't change.
   only an error string, so §3.3 can ask about them. The prompt itself stays in `internal/app`, next
   to D-024's `askDependency`, and reuses its TTY and default-No rules.
 - `internal/app`: wire `holders`, `holders --stop` and the eject and `stop --all` flows.
-- `internal/ui`: queue of confirmations for `x` and the new `p` key, reusing D-024's confirmation
-  rendering and adding a per-question default; the stop sequence runs as commands so the refresh
-  loop never blocks on a 5-second wait.
+- `internal/ui`: the dashboard's `Controller` interface gains methods to list the stoppable holders
+  and unmanaged containers in the way and to run one stop step with the user's answer; the model
+  keeps a queue of questions for `E` and the new `p` key, reusing D-024's confirmation rendering
+  with a per-question default.
 
 ## 5. Out of scope
 
@@ -186,7 +205,7 @@ force-quit, which can lose work, defaults to No. D-024's questions don't change.
 | AS-131 | Process releases the drive but keeps running after SIGTERM | Counted as released; no force-quit question |
 | AS-132 | Root-owned or other user's holder | Not offered; named with owner and "doesn't use sudo" |
 | AS-133 | DockGuard's own shell holds the drive (current directory) | Not offered; named with the relaunch hint |
-| AS-134 | Holder on the protected list (for example Finder) | Not offered; named with its fixed hint |
+| AS-134 | Holder on the protected list (for example `mds` under `/System/`) | Not offered; named with its fixed hint |
 | AS-135 | Signal fails (EPERM) | Error reported; counted as still blocking |
 | AS-136 | `holders --stop` without a terminal | Refused, with `kill <pid>` per stoppable holder; nothing signalled |
 | AS-137 | `stop --all --eject` in a terminal, holders all stopped | Re-scan clean; `diskutil eject` called |
@@ -203,12 +222,18 @@ force-quit, which can lose work, defaults to No. D-024's questions don't change.
 | AS-148 | Dashboard `x`, `esc` at a question | Remaining questions dropped; nothing more stopped; no eject |
 | AS-149 | Dashboard `p` with holders | Same questions as `holders --stop`; no eject; Eject line refreshed |
 | AS-150 | Dashboard `p` with no holders, or drive unmounted | Key not shown; pressing it does nothing |
-| AS-151 | Dashboard refresh while a 5-second quit wait is running | Status keeps refreshing; input stays responsive |
+| AS-151 | Dashboard during a 5-second quit wait | Input stays responsive; `esc` cancels remaining questions; refresh resumes after the sequence |
+| AS-152 | PID recycled during the 5-second wait, user answers yes to force-quit | No SIGKILL; "already gone" |
+| AS-153 | Dashboard `E` with an unmanaged container blocking the container-system stop | Container question shown; yes runs `container stop`; system stop and eject proceed |
+| AS-154 | A user binary named `mds` outside `/System/`, `/usr/`, `/sbin/` holds the drive | Classed stoppable, not protected |
+| AS-155 | `lsof` output without an `L` field for a holder | Owner shown as the numeric UID; classification unchanged |
+| AS-156 | `holders --stop` when the re-scan fails | Exit 2 with the inspection error |
 
 ## 7. Test plan
 
 - Unit tests with injected scanner, process inspector, signaller, clock and prompt cover AS-123 to
-  AS-146 without signalling real processes; dashboard model tests cover AS-147 to AS-151.
+  AS-146 and AS-152 to AS-156 without signalling real processes; dashboard model tests cover
+  AS-147 to AS-151 and AS-153.
 - One integration test starts a throwaway child process (`sleep` with its current directory in a
   temporary folder treated as the mount path), stops it through the real signaller, and covers a
   child that traps SIGTERM to exercise the force-quit path.
@@ -226,5 +251,7 @@ Approve as **D-025** (amends D-019 and D-024 §3.4):
    `[y/N]` (SIGKILL), with re-verification before every signal (§3.2, §3.6);
 3. per-container `[Y/n]` to `container stop` unmanaged containers blocking the container-system
    stop (§3.3);
-4. offered inside `--eject` flows, through new `holders` / `holders --stop` commands (refused
-   without a terminal), and in the dashboard through `x` and a new `p` key (§3.4, §3.5).
+4. offered inside `--eject` flows and at the container-system step of `stop --all` (amending
+   D-024 §3.4's no-questions rule only for these questions), through new `holders` /
+   `holders --stop` commands (refused without a terminal), and in the dashboard through `E` and a
+   new `p` key (§3.4, §3.5).
