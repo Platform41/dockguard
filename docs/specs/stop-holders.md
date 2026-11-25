@@ -95,7 +95,11 @@ On no, the holder is left running and reported as still blocking. A failed signa
 ### 3.3 Unmanaged containers
 
 When stopping the container system is refused because containers outside any DockGuard target are
-running (D-024 §3.4), DockGuard asks about each one:
+running (D-024 §3.4), DockGuard asks about each one. This applies to **every** stop of a
+`container-system` target: `stop <container-system target>`, the container-system step of
+`stop --all`, with or without `--eject`, and the dashboard (clarified 2026-11-25). It does not
+apply to the deprecated `stop_system` pass for configs without a `container-system` target, which
+keeps v0.8.0's refusal until it's removed.
 
 ```text
 Container buildkit is running and isn't managed by DockGuard. Stop it? [Y/n]
@@ -134,7 +138,9 @@ fails. It never stops anything.
 holder, then a re-scan. Refuses without a terminal. Exit codes as `holders`, judged on the re-scan; a failed or timed-out
 re-scan exits 2.
 
-Commands without `--eject`, and `list` and `status`, don't change.
+Holder questions (§3.2) are only asked in `--eject` flows and `holders --stop`; other commands
+don't scan or stop holders. Container questions (§3.3) are asked wherever a container-system target
+is stopped. `list` and `status` don't change.
 
 ### 3.5 Dashboard
 
@@ -175,7 +181,9 @@ force-quit, which can lose work, defaults to No. D-024's questions don't change.
   (`stopped`, `force-stopped`, `declined`, `gone`, `failed`, `not offered`).
 - `internal/target/containersystem`: return the unmanaged container names as structured data, not
   only an error string, so §3.3 can ask about them. The prompt itself stays in `internal/app`, next
-  to D-024's `askDependency`, and reuses its TTY and default-No rules.
+  to D-024's `askDependency`, and reuses its terminal check and input handling (EOF is never
+consent). The answer defaults come from §3.6, not from `askDependency`'s default No (clarified
+2026-11-25).
 - `internal/app`: wire `holders`, `holders --stop` and the eject and `stop --all` flows.
 - `internal/ui`: the dashboard's `Controller` interface gains methods to list the stoppable holders
   and unmanaged containers in the way and to run one stop step with the user's answer; the model
@@ -228,11 +236,13 @@ force-quit, which can lose work, defaults to No. D-024's questions don't change.
 | AS-154 | A user binary named `mds` outside `/System/`, `/usr/`, `/sbin/` holds the drive | Classed stoppable, not protected |
 | AS-155 | `lsof` output without an `L` field for a holder | Owner shown as the numeric UID; classification unchanged |
 | AS-156 | `holders --stop` when the re-scan fails | Exit 2 with the inspection error |
+| AS-157 | `stop <container-system target>` (no `--eject`) blocked by an unmanaged container, in a terminal | Container question shown; yes runs `container stop`; system stop proceeds |
+| AS-158 | Legacy config (`stop_system`, no `container-system` target) with an unmanaged container | v0.8.0 refusal; no question |
 
 ## 7. Test plan
 
 - Unit tests with injected scanner, process inspector, signaller, clock and prompt cover AS-123 to
-  AS-146 and AS-152 to AS-156 without signalling real processes; dashboard model tests cover
+  AS-146 and AS-152 to AS-158 without signalling real processes; dashboard model tests cover
   AS-147 to AS-151 and AS-153.
 - One integration test starts a throwaway child process (`sleep` with its current directory in a
   temporary folder treated as the mount path), stops it through the real signaller, and covers a
