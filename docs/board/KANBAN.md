@@ -51,7 +51,7 @@
 - [ ] `[v0.9.0] Stop processes and containers that block the drive (D-025)`
   **Priority:** P2
   **Spec:** `docs/specs/stop-holders.md` (D-025, with clarifications in PR #38)
-  **Review:** [CLI slice 1 (PR #39)](https://github.com/Platform41/dockguard/pull/39)
+  **Review:** [CLI slice 1 (PR #39)](https://github.com/Platform41/dockguard/pull/39) · [Dashboard slice 2 (PR #40)](https://github.com/Platform41/dockguard/pull/40)
 
 ### Review/Test
 

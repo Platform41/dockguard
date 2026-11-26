@@ -440,6 +440,9 @@ func runStopAllLegacy(cfg config.Config, entries []entry, eject bool, prompts *s
 		if s, ok := e.t.(sharedSystemStopper); ok {
 			stop = s.StopStack
 		}
+		if err := prompts.context().Err(); err != nil {
+			return 1, err
+		}
 		stopRequested, err := stop()
 		switch {
 		case err != nil:
@@ -455,11 +458,11 @@ func runStopAllLegacy(cfg config.Config, entries []entry, eject bool, prompts *s
 
 	// Second pass: every managed stack is down now, so only unmanaged containers can still stop a
 	// shared system from shutting down. A stack that failed above is skipped.
-	failed = stopLegacySystems(entries, justStopped, failed)
+	failed = stopLegacySystems(entries, justStopped, failed, prompts)
 	return finishStopAll(cfg, entries, eject, justStopped, failed, prompts)
 }
 
-func stopLegacySystems(entries []entry, justStopped map[string]bool, failed []string) []string {
+func stopLegacySystems(entries []entry, justStopped map[string]bool, failed []string, prompts *stopPrompts) []string {
 	failedSet := map[string]bool{}
 	for _, name := range failed {
 		failedSet[name] = true
@@ -469,6 +472,9 @@ func stopLegacySystems(entries []entry, justStopped map[string]bool, failed []st
 		s, ok := e.t.(sharedSystemStopper)
 		if !ok || failedSet[e.t.Name()] {
 			continue
+		}
+		if prompts.context().Err() != nil {
+			break
 		}
 		stopped, err := s.StopSystem()
 		switch {
@@ -485,6 +491,9 @@ func stopLegacySystems(entries []entry, justStopped map[string]bool, failed []st
 }
 
 func finishStopAll(cfg config.Config, entries []entry, eject bool, justStopped map[string]bool, failed []string, prompts *stopPrompts) (int, error) {
+	if err := prompts.context().Err(); err != nil {
+		return 1, err
+	}
 	if len(failed) > 0 {
 		if eject {
 			output.PrintNotEjecting(cfg.Drive, "these targets failed to stop: "+strings.Join(failed, ", "))
@@ -497,15 +506,48 @@ func finishStopAll(cfg config.Config, entries []entry, eject bool, justStopped m
 	return ejectIfAllStopped(cfg, entries, justStopped, prompts)
 }
 
-// ejectIfAllStopped is the eject rule (spec §2.3): probe every target again, waiting for the ones
-// just stopped, and eject only when every target is confirmed stopped.
+// ejectIfAllStopped performs the readiness checks before asking about holders.
+// The dashboard checks readiness again after the holder questions, without
+// offering fresh questions to anything that appeared while they were open.
 func ejectIfAllStopped(cfg config.Config, entries []entry, justStopped map[string]bool, prompts *stopPrompts) (int, error) {
+	if err := confirmEjectTargets(cfg, entries, justStopped); err != nil {
+		return 1, err
+	}
+	asked, err := ejectHolderPreflight(cfg.Drive, prompts)
+	if err != nil {
+		return 1, err
+	}
+	if asked && prompts != nil && prompts.ctx != nil {
+		if err := confirmEjectTargets(cfg, entries, nil); err != nil {
+			return 1, err
+		}
+		if _, err := ejectHolderPreflight(cfg.Drive, nil); err != nil {
+			return 1, err
+		}
+	}
+	if cfg.DriveUUID != "" {
+		fresh := driveStatus(cfg)
+		if !fresh.Mounted() {
+			return 1, fmt.Errorf("drive %s: %s (%s); not ejected", cfg.Drive, fresh.State, fresh.Message)
+		}
+	}
+	if err := prompts.context().Err(); err != nil {
+		return 1, err
+	}
+	if err := ejectVolume(cfg.Drive); err != nil {
+		return 1, err
+	}
+	output.PrintEjected(cfg.Drive)
+	return 0, nil
+}
+
+func confirmEjectTargets(cfg config.Config, entries []entry, justStopped map[string]bool) error {
 	s := driveStatus(cfg)
 	if cfg.DriveUUID != "" && !s.Mounted() {
-		return 1, fmt.Errorf("drive %s: %s (%s); nothing to eject", cfg.Drive, s.State, s.Message)
+		return fmt.Errorf("drive %s: %s (%s); nothing to eject", cfg.Drive, s.State, s.Message)
 	}
 	if !s.Mounted() {
-		return 1, fmt.Errorf("drive %s is not mounted; nothing to eject", cfg.Drive)
+		return fmt.Errorf("drive %s is not mounted; nothing to eject", cfg.Drive)
 	}
 
 	var blockers []output.Blocker
@@ -525,24 +567,10 @@ func ejectIfAllStopped(cfg config.Config, entries []entry, justStopped map[strin
 
 	if len(blockers) > 0 {
 		output.PrintEjectRefused(cfg.Drive, blockers)
-		return 1, errors.New("drive not ejected")
+		return errors.New("drive not ejected")
 	}
 
-	if err := ejectHolderPreflight(cfg.Drive, prompts); err != nil {
-		return 1, err
-	}
-
-	if cfg.DriveUUID != "" {
-		fresh := driveStatus(cfg)
-		if !fresh.Mounted() {
-			return 1, fmt.Errorf("drive %s: %s (%s); not ejected", cfg.Drive, fresh.State, fresh.Message)
-		}
-	}
-	if err := ejectVolume(cfg.Drive); err != nil {
-		return 1, err
-	}
-	output.PrintEjected(cfg.Drive)
-	return 0, nil
+	return nil
 }
 
 func waitForStopped(e entry, state target.State, err error) (target.State, error) {

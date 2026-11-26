@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -32,9 +33,9 @@ func runDashboard(cfg config.Config, entries []entry) (int, error) {
 	if !isTerminal() {
 		return 1, errors.New("dockguard ui needs a terminal; use `dockguard list` or `dockguard status` instead")
 	}
-	if err := releaseDriveCWD(cfg.Drive); err != nil {
-		return 1, err
-	}
+	// If the working directory cannot be released, the holder scan still
+	// identifies DockGuard itself and shows the relaunch hint.
+	_ = releaseDriveCWD(cfg.Drive)
 	if err := runUI(&controller{cfg: cfg, entries: entries}); err != nil {
 		return 1, err
 	}
@@ -92,9 +93,10 @@ func (c *controller) Snapshot() ui.Snapshot {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			holders, err := holdersOf(c.cfg.Drive)
-			for _, h := range holders {
-				s.Holders = append(s.Holders, ui.Holder{Name: h.Name, PID: h.PID})
+			service := holderService()
+			list, err := service.Scan(c.cfg.Drive)
+			for _, h := range service.Classify(list) {
+				s.Holders = append(s.Holders, ui.Holder{Name: h.Name, PID: h.PID, Class: string(h.Class), Hint: h.Hint})
 			}
 			if err != nil {
 				s.HolderErr = err.Error()
@@ -137,7 +139,7 @@ func diskUsage(path string) (usedPct float64, freeGB, totalGB uint64) {
 }
 
 func (c *controller) Run(action ui.Action, name string) (bool, string) {
-	return c.run(action, name, nil)
+	return c.run(action, name, nil, nil)
 }
 
 func (c *controller) Plan(action ui.Action, name string) (ui.Confirmation, error) {
@@ -159,12 +161,16 @@ func (c *controller) Plan(action ui.Action, name string) (ui.Confirmation, error
 }
 
 func (c *controller) RunConfirmed(action ui.Action, name string, approval ui.Confirmation) (bool, string) {
-	return c.run(action, name, &approval)
+	return c.run(action, name, &approval, nil)
 }
 
-func (c *controller) run(action ui.Action, name string, approval *ui.Confirmation) (bool, string) {
+func (c *controller) run(action ui.Action, name string, approval *ui.Confirmation, prompts *stopPrompts) (bool, string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if prompts.context().Err() != nil {
+		return false, "Stop cancelled."
+	}
 
 	var buf bytes.Buffer
 	previous := output.Out
@@ -179,7 +185,9 @@ func (c *controller) run(action ui.Action, name string, approval *ui.Confirmatio
 	if action == ui.Mount {
 		code, err = runMount(c.cfg)
 	} else if action == ui.StopAllEject {
-		code, err = runStopAll(c.cfg, c.entries, true, nil)
+		code, err = runStopAll(c.cfg, c.entries, true, prompts)
+	} else if action == ui.StopProcesses {
+		code, err = runHoldersWithPrompts(c.cfg, true, prompts)
 	} else {
 		e, ok := find(c.entries, name)
 		if !ok {
@@ -189,12 +197,14 @@ func (c *controller) run(action ui.Action, name string, approval *ui.Confirmatio
 		case ui.Start:
 			code, err = startWithDependencies(c.cfg, c.entries, e, confirm)
 		case ui.Stop:
-			code, err = stopWithDependencies(c.cfg, c.entries, e, false, confirm, nil)
+			code, err = stopWithDependencies(c.cfg, c.entries, e, false, confirm, prompts)
 		case ui.Check:
 			code, err = runCheck(c.cfg, e)
 		}
 	}
-	if err != nil {
+	if errors.Is(err, context.Canceled) {
+		fmt.Fprintln(&buf, "Stop cancelled.")
+	} else if err != nil {
 		fmt.Fprintln(&buf, err)
 	}
 	return code == 0 && err == nil, buf.String()

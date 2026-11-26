@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -22,6 +23,10 @@ var holderService = func() holders.Service {
 }
 
 func runHolders(cfg config.Config, stop bool) (int, error) {
+	return runHoldersWithPrompts(cfg, stop, &stopPrompts{})
+}
+
+func runHoldersWithPrompts(cfg config.Config, stop bool, prompts *stopPrompts) (int, error) {
 	ds := driveStatus(cfg)
 	if !ds.Mounted() {
 		return 2, fmt.Errorf("couldn't inspect processes using the drive: %s: %s", cfg.Drive, ds.Message)
@@ -42,13 +47,16 @@ func runHolders(cfg config.Config, stop bool) (int, error) {
 		return holderExit(candidates), nil
 	}
 
-	ask := cliPrompt()
+	ask := prompts.question()
 	if ask == nil {
 		printManualQuit(candidates)
 		return 1, errors.New("dockguard holders --stop needs a terminal")
 	}
-	remaining, err := stopHolders(cfg.Drive, s, candidates, ask)
+	remaining, err := stopHolders(prompts.context(), cfg.Drive, s, candidates, ask)
 	printHolders(remaining)
+	if errors.Is(err, context.Canceled) {
+		return 1, err
+	}
 	if err != nil {
 		return 2, holderInspectionError(err)
 	}
@@ -81,9 +89,12 @@ func holderInspectionError(err error) error {
 	return fmt.Errorf("couldn't inspect processes using the drive: %w", err)
 }
 
-func stopHolders(mount string, s holders.Service, candidates []holders.Candidate, ask holders.Prompt) ([]holders.Candidate, error) {
+func stopHolders(ctx context.Context, mount string, s holders.Service, candidates []holders.Candidate, ask holders.Prompt) ([]holders.Candidate, error) {
 	for _, c := range candidates {
-		result, scanErr := s.Stop(mount, c, ask)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		result, scanErr := s.Stop(ctx, mount, c, ask)
 		if scanErr != nil {
 			return nil, scanErr
 		}
@@ -93,15 +104,26 @@ func stopHolders(mount string, s holders.Service, candidates []holders.Candidate
 			fmt.Fprintf(output.Out, "%s: %s\n", c.Holder, result.Message)
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	list, err := s.Scan(mount)
 	return s.Classify(list), err
 }
 
-// A CLI stop creates its prompt lazily and shares it across dependency, container
-// and holder questions. The dashboard passes nil and never reads CLI input.
+// A CLI stop creates its prompt lazily. A dashboard stop supplies its own
+// prompt and context, and shares the same stop flow without reading stdin.
 type stopPrompts struct {
+	ctx     context.Context
 	checked bool
 	ask     holders.Prompt
+}
+
+func (p *stopPrompts) context() context.Context {
+	if p != nil && p.ctx != nil {
+		return p.ctx
+	}
+	return context.Background()
 }
 
 func (p *stopPrompts) question() holders.Prompt {
@@ -115,11 +137,13 @@ func (p *stopPrompts) question() holders.Prompt {
 	return p.ask
 }
 
-func ejectHolderPreflight(mount string, prompts *stopPrompts) error {
+// The boolean reports whether a holder stop pass ran and the dashboard needs
+// to recheck readiness before ejecting.
+func ejectHolderPreflight(mount string, prompts *stopPrompts) (bool, error) {
 	cwdErr := releaseDriveCWD(mount)
 	if cwdErr != nil && prompts == nil {
 		output.PrintNotEjecting(mount, cwdErr.Error())
-		return errors.New("drive not ejected")
+		return false, errors.New("drive not ejected")
 	}
 
 	s := holderService()
@@ -127,10 +151,10 @@ func ejectHolderPreflight(mount string, prompts *stopPrompts) error {
 	if cwdErr != nil {
 		printHolders(s.Classify(list))
 		output.PrintNotEjecting(mount, cwdErr.Error())
-		return errors.New("drive not ejected")
+		return false, errors.New("drive not ejected")
 	}
 	if err != nil || len(list) == 0 {
-		return reportHolderPreflight(mount, platform.DescribeHolders(list), err)
+		return false, reportHolderPreflight(mount, platform.DescribeHolders(list), err)
 	}
 
 	ask := prompts.question()
@@ -139,17 +163,20 @@ func ejectHolderPreflight(mount string, prompts *stopPrompts) error {
 		if prompts != nil {
 			printManualQuit(s.Classify(list))
 		}
-		return err
+		return false, err
 	}
 
 	candidates := s.Classify(list)
 	printHolders(candidates)
-	remaining, err := stopHolders(mount, s, candidates, ask)
+	remaining, err := stopHolders(prompts.context(), mount, s, candidates, ask)
+	if errors.Is(err, context.Canceled) {
+		return true, err
+	}
 	labels := make([]string, 0, len(remaining))
 	for _, c := range remaining {
 		labels = append(labels, c.String())
 	}
-	return reportHolderPreflight(mount, strings.Join(labels, ", "), err)
+	return true, reportHolderPreflight(mount, strings.Join(labels, ", "), err)
 }
 
 func reportHolderPreflight(mount, names string, err error) error {
@@ -173,6 +200,10 @@ type unmanagedContainerStopper interface {
 }
 
 func stopWithUnmanagedContainers(e entry, prompts *stopPrompts) (bool, error) {
+	ctx := prompts.context()
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	requested, err := e.t.Stop()
 	var blocked *containersystem.UnmanagedError
 	system, ok := e.t.(unmanagedContainerStopper)
@@ -187,7 +218,11 @@ func stopWithUnmanagedContainers(e entry, prompts *stopPrompts) (bool, error) {
 	var failures []error
 	for _, name := range blocked.Names {
 		question := fmt.Sprintf("Container %s is running and isn't managed by DockGuard. Stop it?", name)
-		if !ask(question, true) {
+		yes := ask(question, true)
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		if !yes {
 			continue
 		}
 		if err := system.StopUnmanaged(name); err != nil {
@@ -195,6 +230,9 @@ func stopWithUnmanagedContainers(e entry, prompts *stopPrompts) (bool, error) {
 			continue
 		}
 		fmt.Fprintf(output.Out, "Container %s stopped. Restart it with: container start %s\n", name, name)
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
 	}
 	if len(failures) > 0 {
 		return false, errors.Join(failures...)

@@ -1,6 +1,7 @@
 package holders
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -126,7 +127,7 @@ func TestStopSequence(t *testing.T) {
 				},
 			}
 			before := s.Classify([]platform.Holder{holder})
-			got, err := s.Stop(mount, before[0], func(q string, yesDefault bool) bool {
+			got, err := s.Stop(context.Background(), mount, before[0], func(q string, yesDefault bool) bool {
 				if question >= len(tt.answers) {
 					t.Fatalf("unexpected question %q", q)
 				}

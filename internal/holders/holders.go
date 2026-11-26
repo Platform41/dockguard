@@ -2,6 +2,7 @@
 package holders
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -141,7 +142,7 @@ func protectedHint(path string) string {
 	return ""
 }
 
-func (s Service) Stop(mount string, c Candidate, ask Prompt) (Result, error) {
+func (s Service) Stop(ctx context.Context, mount string, c Candidate, ask Prompt) (Result, error) {
 	if !c.CanStop() {
 		return Result{Status: NotOffered}, nil
 	}
@@ -150,19 +151,19 @@ func (s Service) Stop(mount string, c Candidate, ask Prompt) (Result, error) {
 	if c.process.Path == "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder" {
 		question = fmt.Sprintf("%s is using %s. macOS relaunches Finder automatically. Quit it?", c.Holder, mount)
 	}
-	if !ask(question, true) {
+	if ctx.Err() != nil || !ask(question, true) {
 		return stillBlocking(), nil
 	}
-	if result, scanErr := s.verifyAndSignal(mount, c, syscall.SIGTERM); result.Status != "" || scanErr != nil {
+	if result, scanErr := s.verifyAndSignal(ctx, mount, c, syscall.SIGTERM); result.Status != "" || scanErr != nil {
 		return result, scanErr
 	}
 	if result, scanErr := s.wait(mount, c.PID); result.Status != "" || scanErr != nil {
 		return result, scanErr
 	}
-	if !ask(fmt.Sprintf("%s didn't quit. Force-quit it? Unsaved work will be lost.", c.Holder), false) {
+	if ctx.Err() != nil || !ask(fmt.Sprintf("%s didn't quit. Force-quit it? Unsaved work will be lost.", c.Holder), false) {
 		return stillBlocking(), nil
 	}
-	if result, scanErr := s.verifyAndSignal(mount, c, syscall.SIGKILL); result.Status != "" || scanErr != nil {
+	if result, scanErr := s.verifyAndSignal(ctx, mount, c, syscall.SIGKILL); result.Status != "" || scanErr != nil {
 		return result, scanErr
 	}
 
@@ -193,7 +194,7 @@ func stillBlocking() Result {
 
 // An inspection immediately before signalling verifies the identity after the
 // slower volume scan. The scan's record must also match the original owner and name.
-func (s Service) verifyAndSignal(mount string, c Candidate, sig syscall.Signal) (Result, error) {
+func (s Service) verifyAndSignal(ctx context.Context, mount string, c Candidate, sig syscall.Signal) (Result, error) {
 	list, scanErr := s.Scan(mount)
 	if scanErr != nil {
 		return Result{Status: Failed}, scanErr
@@ -210,6 +211,9 @@ func (s Service) verifyAndSignal(mount string, c Candidate, sig syscall.Signal) 
 	case h.UID != c.UID, h.Name != c.Name, !p.Started.Equal(c.process.Started), p.Name != c.process.Name,
 		p.UID != c.process.UID, p.Path != c.process.Path:
 		return alreadyGone(), nil
+	}
+	if ctx.Err() != nil {
+		return stillBlocking(), nil
 	}
 	if err := s.Signal(c.PID, sig); err != nil {
 		if errors.Is(err, syscall.ESRCH) {

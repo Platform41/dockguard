@@ -78,6 +78,12 @@ Build a local binary:
 go build -o ./bin/dockguard ./cmd/dockguard
 ```
 
+## Upgrading to v0.9.0
+
+Existing configs keep working. Everyday start and stop behavior stays the same when nothing
+blocks the drive or the container-system stop. When a blocker appears, the terminal and dashboard
+can ask you to stop it. Use [Drive holders](#drive-holders) to inspect the blockers before ejecting.
+
 ## Upgrading to v0.8.0
 
 v0.8.0 makes shared prerequisites explicit with `depends_on` and the new
@@ -87,8 +93,8 @@ questions. See [Target dependencies](#target-dependencies).
 
 Existing configs keep working for this release. If you use `stop_system`, `list`
 and `status` show a deprecation line for each target using it. Follow
-[Migrating from `stop_system`](#migrating-from-stop_system) before its removal in
-the release after v0.8.0. This changes your config and scripts; updating the binary
+[Migrating from `stop_system`](#migrating-from-stop_system) to switch to an explicit shared
+target. This changes your config and scripts. Updating the binary
 alone does not migrate them. Update with `dockguard version` or the `go install`
 command above.
 
@@ -175,6 +181,7 @@ and refreshes afterward.
 | --- | --- |
 | `dockguard drive` | Inspects the volume and prints its registration line. |
 | `dockguard mount` | Mounts the registered, attached volume and verifies its path. |
+| `dockguard holders [--stop]` | Lists processes using the mounted drive. Add `--stop` to review quit requests in a terminal. |
 | `dockguard ui` | Live dashboard: the drive, whether it's safe to eject, and every target's state, with keys to start, stop, check, or stop everything and eject |
 | `dockguard list` | Lists the configured targets with their state (running, partial, stopped or unknown) and path. Runs no checks. |
 | `dockguard status` | Every target's state and checks. Exits 0 when every target is ready. A running target counts as ready; one whose state can't be read doesn't. |
@@ -194,6 +201,28 @@ the eject. A shell whose current directory is on the drive, Finder/Quick Look or
 also blocks it and is named (for example `zsh (PID 23721)`). If the process scan fails, readiness is
 unknown and DockGuard refuses the eject. There's no override flag.
 
+## Drive holders
+
+Run `dockguard holders` to list processes using the mounted drive and see why each can or cannot
+be offered a quit. It exits 0 when the drive is clear, 1 when processes are using it, and 2 when
+inspection fails. `dockguard holders --stop` asks about each eligible process and checks the drive
+again afterward. In a terminal, `stop --eject` offers the same questions after targets stop.
+Without a terminal, DockGuard leaves blocking processes alone and lists `kill <pid>` commands
+for eligible processes.
+
+- **Quit `[Y/n]`** sends a normal quit request. Enter accepts. DockGuard waits up to five seconds
+  for the process to exit or release the drive. Finder is eligible and macOS relaunches it.
+- **Force-quit `[y/N]`** appears if the process still holds the drive. Enter declines. Force-quitting
+  can lose unsaved work. DockGuard verifies the process and its drive use before either signal.
+- **Stop container `[Y/n]`** appears when an unmanaged container blocks a `container-system` stop.
+  Enter accepts. DockGuard stops the named container, prints its `container start <name>` command,
+  and checks again before stopping the system.
+
+DockGuard leaves root-owned and other users' processes, its own process and ancestors, and
+protected macOS processes alone. It uses no `sudo`. Container questions leave container data
+intact. Configured stacks stop through their own scripts, and DockGuard leaves container runtime
+processes alone.
+
 ## Dashboard
 
 `dockguard ui` opens a live dashboard in the terminal:
@@ -201,14 +230,14 @@ unknown and DockGuard refuses the eject. There's no override flag.
 ```
 ──────────────────────────── DockGuard · ExternalSSD ────────────────────────────
  Drive  /Volumes/ExternalSSD   ● mounted   ▓▓▓▓░░░░░░░░░░  26% used · 685 GB free
- Eject  ✗ blocked by: myapp-db (running), zsh (PID 23721, using drive)
+ Eject  ✗ blocked by: myapp-db (running), zsh (PID 23721, using drive) [self]
 
  ▌○ docker       docker-desktop  stopped  …ExternalSSD/docker-data/DockerDesktop
   ○ xcode        app             stopped  …/Library/Developer/Xcode/DerivedData
   ● myapp-db     postgres        running  /Volumes/ExternalSSD/pgdata/myapp
   ● myapp-stack  container       running  /Volumes/ExternalSSD/container-data
 
- ↑↓ move · s start · x stop · c check · E eject all · r refresh · q quit
+ p processes · ↑↓ · s start · x stop · E eject all · q quit
 ```
 
 It refreshes target and process-holder state every 3 seconds. `safe to eject` means both checks
@@ -220,6 +249,13 @@ asks before stopping active dependents, using the same questions as the CLI.
 Press a fresh `y`/`Y` to accept; any other key cancels without changing targets.
 Unknown prerequisite state refuses rather than offering a start. If the targets
 needing action change while a confirmation is open, retry to confirm the new set.
+
+When the drive is mounted and the scan finds holders, `p` offers the
+[drive-holder questions](#drive-holders) and refreshes without ejecting. `E` offers those questions
+before its final eject check. Stopping a `container-system` target can also ask about unmanaged
+containers. For these questions press `y` or `n`, or use Enter to take the displayed default.
+Esc cancels the remaining questions and the eject, if requested. A process that already received
+a signal is still checked and reported. Refresh resumes when the action finishes.
 
 With a registered drive (`drive_uuid`), the Drive line explains any problem, such as
 `○ mounted elsewhere — registered volume mounted at /Volumes/ExternalSSD 1, not /Volumes/ExternalSSD`. When the drive is attached but unmounted, for example
@@ -353,8 +389,9 @@ On yes, dependents stop in reverse dependency order and must be confirmed stoppe
 before the next action. On No or without a terminal, the message is
 `Not stopped. Stop these first: myapp-stack, other-stack`; nothing stops.
 
-`stop --all` needs no prompts. Targets stop in reverse dependency order;
-among targets ready to stop, the last configured target goes first. A failure or
+`stop --all` stops targets in reverse dependency order without dependency prompts.
+A blocked container-system stop or eject can ask about [blockers](#drive-holders).
+Among targets ready to stop, the last configured target goes first. A failure or
 unconfirmed stop leaves all of that target's prerequisites alone and reports them,
 while independent targets can still stop. Any failure prevents eject. With no
 dependencies, this is the previous reverse config order. Configs without an explicit
@@ -381,7 +418,7 @@ passes, with target dependencies honored in the first pass. `list` and `status`
 print, once per target using it:
 `stop_system is deprecated; add a container-system target and depends_on (see README).`
 Without `depends_on`, stop ordering and command output remain as in v0.7.x apart
-from these deprecation notices. `stop_system` is removed in the release after v0.8.0.
+from these deprecation notices.
 
 **v0.1 configs still work.** A file with `external_mount_path`, `docker_storage_path` and
 `docker_desktop:` is read as a single `docker` target, and `status` suggests the new format.
@@ -465,9 +502,9 @@ the `container-system` kind, `start` runs `container system start` and confirms
 `running`; `stop` runs `container system stop`. Its checks require the CLI on the
 PATH and Apple's data folder on the drive, plus the usual `data_path` checks when
 set. State is running, stopped (`unregistered`) or unknown. A running or unknown
-system blocks eject. Stop refuses and names unmanaged active containers: names not
-listed in any configured stack's `containers` list. Because the system is shared,
-declare `depends_on` on every stack using it.
+system blocks eject. If active containers outside configured stacks block the system stop,
+DockGuard offers to [stop them](#drive-holders) in a terminal or in the dashboard. The system
+stop is refused while blockers remain. Declare `depends_on` on every stack using the system.
 
 Legacy `stop_system: true` is deprecated but still works for this release: stop
 also stops the service, and a running system makes an otherwise stopped stack

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,16 @@ func (f *fakeCtl) Snapshot() Snapshot { f.snaps++; return f.snap }
 func (f *fakeCtl) Run(a Action, t string) (bool, string) {
 	f.calls = append(f.calls, call{a, t})
 	return f.ok, f.output
+}
+
+type finishedStop struct{ StopUpdate }
+
+func (s finishedStop) Next() StopUpdate     { return s.StopUpdate }
+func (s finishedStop) Step(bool) StopUpdate { return s.StopUpdate }
+
+func (f *fakeCtl) BeginStop(_ context.Context, a Action, name string, _ *Confirmation) StopSequence {
+	ok, output := f.Run(a, name)
+	return finishedStop{StopUpdate{OK: ok, Output: output}}
 }
 
 func snapshot(states ...target.State) Snapshot {

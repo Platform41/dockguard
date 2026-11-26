@@ -4,6 +4,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -30,8 +31,9 @@ type Row struct {
 
 // Holder is an unmanaged process with an open file or current directory on the drive.
 type Holder struct {
-	Name string
-	PID  int
+	Name        string
+	PID         int
+	Class, Hint string
 }
 
 // Snapshot is one probe of the drive and every target.
@@ -59,6 +61,7 @@ const (
 	Check
 	StopAllEject
 	Mount
+	StopProcesses
 )
 
 func (a Action) String() string {
@@ -71,6 +74,8 @@ func (a Action) String() string {
 		return "check"
 	case Mount:
 		return "mount"
+	case StopProcesses:
+		return "stop processes"
 	default:
 		return "stop --all --eject"
 	}
@@ -82,6 +87,9 @@ type Controller interface {
 	// Run performs the action (target is empty for StopAllEject) and returns whether it succeeded
 	// and the text the matching CLI command would have printed.
 	Run(action Action, target string) (ok bool, output string)
+	// BeginStop starts a stop action and exposes its blocker questions in order.
+	// Cancelling ctx prevents further steps after any operation already in flight.
+	BeginStop(ctx context.Context, action Action, target string, approval *Confirmation) StopSequence
 }
 
 // Confirmation names exactly the additional targets the user is being asked to affect.
@@ -108,7 +116,14 @@ func Blockers(s Snapshot) []string {
 		}
 	}
 	for _, h := range s.Holders {
-		blockers = append(blockers, fmt.Sprintf("%s (PID %d, using drive)", h.Name, h.PID))
+		label := fmt.Sprintf("%s (PID %d, using drive)", h.Name, h.PID)
+		if h.Class != "" {
+			label += " [" + h.Class + "]"
+		}
+		if h.Hint != "" {
+			label += " — " + h.Hint
+		}
+		blockers = append(blockers, label)
 	}
 	return blockers
 }
@@ -132,13 +147,17 @@ type (
 
 // Model is the dashboard's state.
 type Model struct {
-	ctl        Controller
-	snap       Snapshot
-	loaded     bool
-	selected   int
-	refreshing bool
-	busy       bool
-	confirming *pending
+	ctl           Controller
+	ctx           context.Context
+	stopping      *activeStop
+	stopQuestion  *stopQuestionMsg
+	quitAfterStop bool
+	snap          Snapshot
+	loaded        bool
+	selected      int
+	refreshing    bool
+	busy          bool
+	confirming    *pending
 	// queued is an action waiting for an in-flight probe to finish.
 	queued     *pending
 	lastTitle  string
@@ -156,7 +175,7 @@ type pending struct {
 }
 
 // New returns a dashboard model.
-func New(ctl Controller) Model { return Model{ctl: ctl, refreshing: true} }
+func New(ctl Controller) Model { return Model{ctl: ctl, ctx: context.Background(), refreshing: true} }
 
 func (m Model) Init() tea.Cmd { return tea.Batch(m.refresh(), tick()) }
 
@@ -171,6 +190,12 @@ func tick() tea.Cmd {
 
 func (m Model) runPending(p pending) tea.Cmd {
 	ctl := m.ctl
+	if stop := m.stopping; stop != nil {
+		return func() tea.Msg {
+			sequence := ctl.BeginStop(stop.ctx, p.action, p.target, p.approval)
+			return stopMessage(p, sequence, sequence.Next())
+		}
+	}
 	return func() tea.Msg {
 		if p.planning {
 			plan, err := ctl.(DependencyController).Plan(p.action, p.target)
@@ -195,6 +220,10 @@ func (m Model) dispatch(a Action, name string) (Model, tea.Cmd) {
 
 func (m Model) dispatchPending(p pending) (Model, tea.Cmd) {
 	m.busy = true
+	if !p.planning && (p.action == Stop || p.action == StopAllEject || p.action == StopProcesses) {
+		ctx, cancel := context.WithCancel(m.ctx)
+		m.stopping = &activeStop{ctx: ctx, cancel: cancel}
+	}
 	if m.refreshing {
 		m.queued = &p
 		return m, nil
@@ -249,7 +278,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshing = true
 		return m, tea.Batch(m.refresh(), tick())
 
+	case stopQuestionMsg:
+		if m.stopping.ctx.Err() != nil {
+			return m, func() tea.Msg { return stopMessage(msg.pending, msg.sequence, msg.sequence.Next()) }
+		}
+		m.stopQuestion = &msg
+		return m, nil
+
 	case actionMsg:
+		if m.stopping != nil {
+			m.stopping.cancel()
+			m.stopping = nil
+			m.stopQuestion = nil
+			if m.quitAfterStop {
+				return m, tea.Quit
+			}
+		}
 		m.busy = false
 		m.lastOK, m.lastOutput = msg.ok, strings.TrimRight(msg.output, "\n")
 		m.lastTitle = msg.action.String()
@@ -283,11 +327,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmds []tea.Cmd
 			model := m
 			for _, r := range msg.Runes {
-				wasConfirming := model.confirming != nil
+				wasConfirming := model.confirming != nil || model.stopQuestion != nil
 				next, cmd := model.key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 				model = next.(Model)
 				cmds = append(cmds, cmd)
-				if wasConfirming || model.confirming != nil {
+				if wasConfirming || model.confirming != nil || model.stopQuestion != nil {
 					break
 				}
 			}
@@ -300,6 +344,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := msg.String()
+	if m.stopping != nil {
+		return m.stopKey(k)
+	}
 
 	// A pending confirmation takes the next key: "y" runs it, anything else cancels (AS-33).
 	if m.confirming != nil {
@@ -350,6 +397,10 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "x":
 		if name != "" {
 			return m.prepare(Stop, name)
+		}
+	case "p":
+		if m.canStopProcesses() {
+			return m.dispatch(StopProcesses, "")
 		}
 	case "E":
 		m.confirming = &pending{action: StopAllEject}
@@ -499,8 +550,15 @@ func (m Model) View() string {
 	// Last action.
 	if m.queued != nil {
 		b.WriteString("\n " + warn.Render("Waiting for the current check to finish, then "+m.queued.action.String()+"…") + "\n")
-	} else if m.busy {
-		b.WriteString("\n " + warn.Render("Working…") + "\n")
+	} else if m.busy && m.stopQuestion == nil {
+		working := "Working…"
+		if m.stopping != nil {
+			working += " · esc cancel"
+			if m.stopping.ctx.Err() != nil {
+				working = "Cancelling…"
+			}
+		}
+		b.WriteString("\n " + warn.Render(working) + "\n")
 	} else if m.lastTitle != "" {
 		status := good.Render("✓")
 		if !m.lastOK {
@@ -515,7 +573,14 @@ func (m Model) View() string {
 
 	// Footer.
 	b.WriteString("\n")
-	if m.confirming != nil && m.confirming.question != "" {
+	if q := m.stopQuestion; q != nil {
+		suffix, enter := "[y/N]", "no"
+		if q.question.DefaultYes {
+			suffix, enter = "[Y/n]", "yes"
+		}
+		b.WriteString(" " + confirm.Render(q.question.Text) + " " + dim.Render(suffix) + "\n")
+		b.WriteString(" " + dim.Render("Enter = "+enter+" · esc cancel") + "\n")
+	} else if m.confirming != nil && m.confirming.question != "" {
 		if m.confirming.detail != "" {
 			b.WriteString(" " + m.confirming.detail + "\n")
 		}
@@ -535,11 +600,14 @@ func (m Model) View() string {
 			" "+confirm.Render(short)+" "+dim.Render("y / any key = cancel"),
 		) + "\n")
 	} else {
+		var keys string
 		if m.snap.CanMount {
-			b.WriteString(" " + dim.Render("m mount · "+footer(width-12)) + "\n")
-		} else {
-			b.WriteString(" " + dim.Render(footer(width-2)) + "\n")
+			keys += "m mount · "
 		}
+		if m.canStopProcesses() {
+			keys += "p processes · "
+		}
+		b.WriteString(" " + dim.Render(keys+footer(width-2-lipgloss.Width(keys))) + "\n")
 	}
 	return b.String()
 }
@@ -662,6 +730,10 @@ func colorLine(line string) string {
 
 // Run opens the dashboard and returns when the user quits.
 func Run(ctl Controller) error {
-	_, err := tea.NewProgram(New(ctl), tea.WithAltScreen()).Run()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m := New(ctl)
+	m.ctx = ctx
+	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
 }

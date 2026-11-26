@@ -3,6 +3,7 @@ package holders
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -102,7 +103,7 @@ func TestStopOwnChild(t *testing.T) {
 				t.Fatalf("child classification = %v", candidates)
 			}
 			questions := 0
-			result, err := s.Stop(dir, candidates[0], func(string, bool) bool { questions++; return true })
+			result, err := s.Stop(context.Background(), dir, candidates[0], func(string, bool) bool { questions++; return true })
 			want, count := Stopped, 1
 			if force {
 				want, count = ForceStopped, 2
