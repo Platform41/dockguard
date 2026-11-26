@@ -48,11 +48,6 @@
 
 ### Doing
 
-- [ ] `[v0.9.0] Stop processes and containers that block the drive (D-025)`
-  **Priority:** P2
-  **Spec:** `docs/specs/stop-holders.md` (D-025, with clarifications in PR #38)
-  **Review:** [CLI slice 1 (PR #39)](https://github.com/Platform41/dockguard/pull/39) · [Dashboard slice 2 (PR #40)](https://github.com/Platform41/dockguard/pull/40)
-
 ### Review/Test
 
 ### Blocked
@@ -65,6 +60,24 @@
   **Next Action:** Run live validation once the Go CLI skeleton exists and a target setup is available.
 
 ### Done
+
+- [x] `[v0.9.0] Release: stop processes and containers that block the drive`
+  **Owner:** One
+  **Priority:** P2
+  **Completed:** 2026-11-26
+  **Branch:** `chore/release-v0.9.0`
+  **Deliverable:** `docs/releases/v0.9.0.md`, tag `v0.9.0`
+  **Notes:** Release review reran the full Go suite (600 tests including subtests), race suite,
+  `CGO_ENABLED=0` suite, `go vet` and `gofmt` on merged master `d53971b`. Maintainer live check
+  passed: dashboard `p` (quit, force-quit declined/accepted, esc), runtimes never offered, unmanaged
+  container question, `stop --all --eject`.
+
+- [x] `[v0.9.0] Stop processes and containers that block the drive (D-025)`
+  **Priority:** P2
+  **Spec:** `docs/specs/stop-holders.md` (D-025, with clarifications in PR #38)
+  **Completed:** 2026-11-26
+  **Fix:** [managed runtimes (PR #42)](https://github.com/Platform41/dockguard/pull/42)
+  **Review:** [CLI slice 1 (PR #39)](https://github.com/Platform41/dockguard/pull/39) · [Dashboard slice 2 (PR #40)](https://github.com/Platform41/dockguard/pull/40)
 
 - [x] `[v0.8.0] Release: target dependencies and the container-system target`
   **Owner:** One

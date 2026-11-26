@@ -1,6 +1,6 @@
 # Proposal — Stopping processes and containers that block the drive
 
-**Status:** Approved by Azrad, 2026-11-25
+**Status:** Approved by Azrad, 2026-11-25; released in v0.9.0 (2026-11-26)
 **Target:** v0.9.0
 **Owner:** One
 **Builder:** Three
