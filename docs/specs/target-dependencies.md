@@ -154,7 +154,8 @@ container stop requested.
   from v0.7.x, apart from the stated deprecation lines in `list`/`status`.
 - A config that has a `container-system` target **and** `stop_system: true` anywhere is a config
   error naming the target: the two mechanisms would conflict.
-- `stop_system` is removed in the release after v0.8.0.
+- `stop_system` is removed in v0.10.0 (postponed on 2026-11-26 from the release after v0.8.0,
+  so v0.9.0 carries D-025 alone).
 
 ### 3.7 Docs and the example config
 
