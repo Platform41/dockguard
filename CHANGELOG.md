@@ -2,6 +2,20 @@
 
 All notable changes to DockGuard are documented in this file.
 
+## [v0.9.0] - 2026-11-26
+
+### Added
+- `dockguard holders` lists processes holding the mounted drive with their class (stoppable, other user, self, protected, managed runtime) and exits 0/1/2 for clear/held/inspection failure (D-025).
+- `dockguard holders --stop` and eject flows ask `Quit it? [Y/n]` (SIGTERM) and, after up to five seconds, `Force-quit it? Unsaved work will be lost. [y/N]` (SIGKILL), re-verifying the process before each signal; without a terminal they print `kill <pid>` commands instead (D-025).
+- Stopping a `container-system` target asks `[Y/n]` to `container stop` each unmanaged container in the way and prints its restart command (D-025).
+- Dashboard: `E` asks the same questions; new `p` key offers process stops without ejecting (D-025).
+
+### Changed
+- DockGuard's own terminal, other users' processes, protected macOS processes and container/VM runtimes (Apple container, macOS Virtualization, Docker Desktop) are named but never stopped (D-025).
+
+### Deprecated
+- `stop_system` removal postponed to v0.10.0.
+
 ## [v0.8.0] - 2026-11-19
 
 ### Added
