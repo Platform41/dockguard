@@ -49,6 +49,7 @@ volume (D-019's `lsof` query). Each holder is classified:
 | **other user** | Owned by root or another user | No — named, with "owned by <user>; DockGuard doesn't use sudo" |
 | **self** | DockGuard's own PID and every ancestor (its shell, the terminal app) | No — named, with "relaunch DockGuard from outside the drive" for a shell holding it via its current directory |
 | **protected** | Built-in list matched on the executable path, not the `lsof` command name: `launchd`, `kernel_task`, `WindowServer`, `loginwindow`, `Dock`, `SystemUIServer`, `mds`, `mds_stores`, `mdworker*` (prefix, covers `mdworker_shared`), `fseventsd`, and only when the executable lives under `/System/`, `/usr/` or `/sbin/` | No — named, with a fixed hint (for example "Spotlight is indexing the drive; wait or exclude it in System Settings") |
+| **managed runtime** | Executable in Apple container's install (its CLI or apiserver, or a binary under `libexec/container-plugins/` or `libexec/container/plugins/`), under `/System/Library/Frameworks/Virtualization.framework/`, or inside `Docker.app/Contents/`. Match the executable path, including resolved symlinks, rather than the reported command name. | No — named, with "stop it through its DockGuard target or container stop" |
 
 The protected list is fixed in code, not in config, for this release. Finder is deliberately not
 on it: it's stoppable, and the question says that macOS relaunches it straight away, which is
@@ -238,11 +239,14 @@ consent). The answer defaults come from §3.6, not from `askDependency`'s defaul
 | AS-156 | `holders --stop` when the re-scan fails | Exit 2 with the inspection error |
 | AS-157 | `stop <container-system target>` (no `--eject`) blocked by an unmanaged container, in a terminal | Container question shown; yes runs `container stop`; system stop proceeds |
 | AS-158 | Legacy config (`stop_system`, no `container-system` target) with an unmanaged container | v0.8.0 refusal; no question |
+| AS-159 | Apple container runtime at `/opt/homebrew/Cellar/container/1.7.1/libexec/container-plugins/container-runtime-linux/bin/container-runtime-linux` and macOS VM at `/System/Library/Frameworks/Virtualization.framework/Versions/A/XPCServices/com.apple.Virtualization.VirtualMachine.xpc/Contents/MacOS/com.apple.Virtualization.VirtualMachine` hold the drive | Both named with the managed-runtime class and hint. Neither is offered in `holders`, `holders --stop`, the eject flow, or dashboard `p`. |
+| AS-160 | A Docker Desktop VM process under `Docker.app/Contents/` holds the drive | Named as managed runtime and never offered. |
+| AS-161 | A user executable named `container-runtime-linux` outside the runtime paths holds the drive | Classed stoppable. |
 
 ## 7. Test plan
 
 - Unit tests with injected scanner, process inspector, signaller, clock and prompt cover AS-123 to
-  AS-146 and AS-152 to AS-158 without signalling real processes; dashboard model tests cover
+  AS-146 and AS-152 to AS-161 without signalling real processes; dashboard model tests cover
   AS-147 to AS-151 and AS-153.
 - One integration test starts a throwaway child process (`sleep` with its current directory in a
   temporary folder treated as the mount path), stops it through the real signaller, and covers a

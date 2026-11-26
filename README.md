@@ -221,8 +221,9 @@ for eligible processes.
 
 DockGuard leaves root-owned and other users' processes, its own process and ancestors, and
 protected macOS processes alone. It uses no `sudo`. Container questions leave container data
-intact. Configured stacks stop through their own scripts, and DockGuard leaves container runtime
-processes alone.
+intact. DockGuard lists Apple container, macOS Virtualization and Docker Desktop runtime processes
+as `managed runtime` and leaves them running. Stop Docker Desktop through its DockGuard
+target. For Apple containers, use their DockGuard target or `container stop`.
 
 ## Dashboard
 
