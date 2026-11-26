@@ -19,10 +19,11 @@ import (
 type Class string
 
 const (
-	Stoppable Class = "stoppable"
-	OtherUser Class = "other user"
-	Self      Class = "self"
-	Protected Class = "protected"
+	Stoppable      Class = "stoppable"
+	OtherUser      Class = "other user"
+	Self           Class = "self"
+	Protected      Class = "protected"
+	ManagedRuntime Class = "managed runtime"
 )
 
 type Status string
@@ -107,6 +108,8 @@ func (s Service) Classify(list []platform.Holder) []Candidate {
 				c.Hint = "already gone"
 			default:
 				switch hint := protectedHint(p.Path); {
+				case isManagedRuntime(p.Path):
+					c.Class, c.Hint = ManagedRuntime, managedRuntimeHint
 				case hint != "":
 					c.Class, c.Hint = Protected, hint
 				case !p.MatchesCommand(h.Name):
@@ -200,6 +203,9 @@ func (s Service) verifyAndSignal(ctx context.Context, mount string, c Candidate,
 		return Result{Status: Failed}, scanErr
 	}
 	h := findPID(list, c.PID)
+	if h != nil && isManagedRuntime(c.process.Path) {
+		return Result{Status: NotOffered, Message: managedRuntimeHint}, nil
+	}
 	p, err := s.Inspect(c.PID)
 	switch {
 	case errors.Is(err, os.ErrProcessDone), errors.Is(err, syscall.ESRCH):
