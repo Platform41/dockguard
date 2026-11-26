@@ -92,7 +92,8 @@ without a terminal they refuse with commands to run. The dashboard asks the same
 questions. See [Target dependencies](#target-dependencies).
 
 Existing configs keep working for this release. If you use `stop_system`, `list`
-and `status` show a deprecation line for each target using it. Follow
+and `status` show a deprecation line for each target using it; `stop_system` is removed in
+v0.10.0. Follow
 [Migrating from `stop_system`](#migrating-from-stop_system) to switch to an explicit shared
 target. This changes your config and scripts. Updating the binary
 alone does not migrate them. Update with `dockguard version` or the `go install`
@@ -418,7 +419,7 @@ passes, with target dependencies honored in the first pass. `list` and `status`
 print, once per target using it:
 `stop_system is deprecated; add a container-system target and depends_on (see README).`
 Without `depends_on`, stop ordering and command output remain as in v0.7.x apart
-from these deprecation notices.
+from these deprecation notices. `stop_system` is removed in v0.10.0.
 
 **v0.1 configs still work.** A file with `external_mount_path`, `docker_storage_path` and
 `docker_desktop:` is read as a single `docker` target, and `status` suggests the new format.
